@@ -9,6 +9,7 @@ on:
       - 'common/**.yaml'
       - 'testing/**.yaml'
       - 'dehumidifier/**.yaml'
+      - 'hotwater-heatpump/**.yaml'
 
 jobs:
   esphome-compile:
@@ -26,6 +27,9 @@ jobs:
           - config: dehumidifier/dehumidifier.yaml
             friendly_name: "Dehumidifier"
             main_name: "dehumidifier"            
+          - config: hotwater-heatpump/hotwater-heatpump.yaml
+            friendly_name: "BrauchwasserWP"
+            main_name: "brauchwasserwp"              
 
     steps:
       - name: Checkout Code
@@ -36,7 +40,9 @@ jobs:
 
       - name: Create Fake secrets.yaml
         run: |
-          cat <<EOF | tee testing/secrets.yaml > dehumidifier/secrets.yaml
+          cat <<EOF | tee hotwater-heatpump/secrets.yaml \
+                    | tee dehumidifier/secrets.yaml \
+                    > testing/secrets.yaml
           wifi_ssid: "Fake-WiFi-Network"
           wifi_password: "FakeWiFiPassword123"
           EOF
