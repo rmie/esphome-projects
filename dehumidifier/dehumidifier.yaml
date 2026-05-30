@@ -11,8 +11,6 @@ external_components:
       url: https://github.com/muxa/esphome-state-machine
 
 esphome:
-  name: "${main_name}"
-  friendly_name: "${friendly_name}"
   on_boot:
     - priority: 800
       then:

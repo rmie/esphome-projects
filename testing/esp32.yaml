@@ -2,9 +2,6 @@ packages:
   platform: !include ../common/esp32.yaml
   bt_proxy: !include ../common/bt_proxy.yaml  
     
-esphome:
-  name: "${main_name}"
-  friendly_name: "${friendly_name}"
 
 sensor:   
   - platform: bthome_mithermometer
