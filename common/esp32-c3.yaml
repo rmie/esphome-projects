@@ -1,0 +1,9 @@
+packages:
+  management:
+    url: https://github.com/rmie/esphome-projects
+    files: [common/all.yaml]  
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf

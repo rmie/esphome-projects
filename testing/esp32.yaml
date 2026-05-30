@@ -1,0 +1,93 @@
+packages:
+  platform:
+    url: https://github.com/rmie/esphome-projects
+    files: [common/esp32.yaml]
+  bt_proxy:
+    url: https://github.com/rmie/esphome-projects
+    files: [common/bt_proxy.yaml]  
+    
+esphome:
+  name: "${main_name}"
+  friendly_name: "${friendly_name}"
+
+sensor:   
+  - platform: bthome_mithermometer
+    mac_address: A4:C1:38:82:5E:89
+    id: atc_th1
+    temperature:
+      name: "ATC-TH1 Temperature"
+      id: atc_th1_temperature
+      filters:
+        - timeout: 300s
+        - exponential_moving_average:
+            alpha: 0.2
+            send_every: 1
+    humidity:
+      name: "ATC-TH1 Humidity"
+      id: atc_th1_humidity
+      filters:
+        - timeout: 300s
+        - exponential_moving_average:
+            alpha: 0.2
+            send_every: 1
+    battery_voltage:
+      name: "ATC-TH1 Battery Voltage"
+    signal_strength:
+      name: "ATC-TH1 Signal"
+
+  - platform: absolute_humidity
+    name: "ATC-TH1 Absolute Humidity"
+    temperature: atc_th1_temperature
+    humidity: atc_th1_humidity
+
+  - platform: bthome_mithermometer
+    mac_address: A4:C1:38:2B:D6:B1
+    id: atc_th6
+    temperature:
+      name: "ATC-TH6 Temperature"
+      id: atc_th6_temperature
+      filters:
+        - timeout: 300s
+        - exponential_moving_average:
+            alpha: 0.2
+            send_every: 1
+    humidity:
+      name: "ATC-TH6 Humidity"
+      id: atc_th6_humidity
+      filters:
+        - timeout: 300s
+        - exponential_moving_average:
+            alpha: 0.2
+            send_every: 1
+    battery_voltage:
+      name: "ATC-TH6 Battery Voltage"
+    signal_strength:
+      name: "ATC-TH6 Signal"      
+
+  - platform: absolute_humidity
+    name: "ATC-TH6 Absolute Humidity"
+    temperature: atc_th6_temperature
+    humidity: atc_th6_humidity  
+
+binary_sensor:
+  - platform: homeassistant
+    name: "EG-EssenLicht"
+    id: eg_essenlicht_eg_essen_licht
+    entity_id: switch.eg_essenlicht_eg_essen_licht
+        
+  - platform: gpio
+    name: "Boot"
+    pin:
+      number: GPIO0
+      mode:
+        input: true
+      inverted: true
+    filters:
+      - delayed_off: 20ms
+    on_click:
+      then: 
+      - light.toggle: esp_cam_light
+      - homeassistant.service:
+          service: switch.toggle
+          data:
+            entity_id: switch.eg_essenlicht_eg_essen_licht   

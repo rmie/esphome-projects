@@ -1,0 +1,12 @@
+packages:
+  management:
+    url: https://github.com/rmie/esphome-projects
+    files: [common/all.yaml]  
+
+esp32:
+  board: esp32dev
+  flash_size: 4MB
+  framework:
+    type: esp-idf
+    advanced:
+      minimum_chip_revision: "3.1"

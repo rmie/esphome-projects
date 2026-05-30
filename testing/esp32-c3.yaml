@@ -1,0 +1,80 @@
+packages:
+  platform:
+    url: https://github.com/rmie/esphome-projects
+    files: [common/esp32-c3.yaml]
+  bt_proxy:
+    url: https://github.com/rmie/esphome-projects
+    files: [common/bt_proxy.yaml]  
+    
+esphome:
+  name: "${main_name}"
+  friendly_name: "${friendly_name}"
+
+esp32_ble_tracker:
+  scan_parameters:
+    active: false
+    interval: 640ms
+    window: 560ms
+    
+bluetooth_proxy:
+  active: true
+  connection_slots: 3
+
+sensor:
+  - platform: bthome_mithermometer
+    mac_address: A4:C1:38:82:5E:89
+    id: atc_th1
+    temperature:
+      name: "ATC-TH1 Temperature"
+      id: atc_th1_temperature
+      filters:
+        - timeout: 300s
+        - exponential_moving_average:
+            alpha: 0.2
+            send_every: 1
+    humidity:
+      name: "ATC-TH1 Humidity"
+      id: atc_th1_humidity
+      filters:
+        - timeout: 300s
+        - exponential_moving_average:
+            alpha: 0.2
+            send_every: 1
+    battery_voltage:
+      name: "ATC-TH1 Battery Voltage"
+    signal_strength:
+      name: "ATC-TH1 Signal"
+
+  - platform: absolute_humidity
+    name: "ATC-TH1 Absolute Humidity"
+    temperature: atc_th1_temperature
+    humidity: atc_th1_humidity
+
+  - platform: bthome_mithermometer
+    mac_address: A4:C1:38:2B:D6:B1
+    id: atc_th6
+    temperature:
+      name: "ATC-TH6 Temperature"
+      id: atc_th6_temperature
+      filters:
+        - timeout: 300s
+        - exponential_moving_average:
+            alpha: 0.2
+            send_every: 1
+    humidity:
+      name: "ATC-TH6 Humidity"
+      id: atc_th6_humidity
+      filters:
+        - timeout: 300s
+        - exponential_moving_average:
+            alpha: 0.2
+            send_every: 1
+    battery_voltage:
+      name: "ATC-TH6 Battery Voltage"
+    signal_strength:
+      name: "ATC-TH6 Signal"      
+
+  - platform: absolute_humidity
+    name: "ATC-TH6 Absolute Humidity"
+    temperature: atc_th6_temperature
+    humidity: atc_th6_humidity

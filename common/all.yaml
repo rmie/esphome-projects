@@ -1,0 +1,4 @@
+packages:
+  default: !include default.yaml
+  logging: !include logging.yaml
+  wifi: !include wifi.yaml
