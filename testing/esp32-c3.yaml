@@ -1,10 +1,6 @@
 packages:
-  platform:
-    url: https://github.com/rmie/esphome-projects
-    files: [common/esp32-c3.yaml]
-  bt_proxy:
-    url: https://github.com/rmie/esphome-projects
-    files: [common/bt_proxy.yaml]  
+  platform: !include ../common/esp32-c3.yaml
+  bt_proxy: !include ../common/bt_proxy.yaml 
 
 esphome:
   name: "${main_name}"

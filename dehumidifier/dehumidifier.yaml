@@ -3,9 +3,7 @@ substitutions:
   friendly_name: "Dehumidifier"
 
 packages:
-  platform:
-    url: https://github.com/rmie/esphome-projects
-    files: [common/esp32.yaml]
+  platform: !include ../common/esp32.yaml
 
 external_components:
   - source:

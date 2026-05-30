@@ -1,0 +1,58 @@
+name: Test ESPHome Compile
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/pr.yaml'
+      - 'common/**.yaml'
+      - 'testing/**.yaml'
+      - 'dehumidifier/**.yaml'
+
+jobs:
+  esphome-compile:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        device: 
+          - config: testing/esp32.yaml
+            friendly_name: "Test esp32"
+            main_name: "test-esp32"
+          - config: testing/esp32-c3.yaml
+            friendly_name: "Test esp32-c3"
+            main_name: "test-esp32-c3"          
+          - config: dehumidifier/dehumidifier.yaml
+            friendly_name: "Dehumidifier"
+            main_name: "dehumidifier"            
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@main
+
+      - name: Configure Git Safe Directory
+        run: git config --global --add safe.directory '*'        
+
+      - name: Create Fake secrets.yaml
+        run: |
+          cat <<EOF | tee testing/secrets.yaml > dehumidifier/secrets.yaml
+          wifi_ssid: "Fake-WiFi-Network"
+          wifi_password: "FakeWiFiPassword123"
+          EOF
+
+      - name: Cache ESPHome Build Files
+        uses: actions/cache@main
+        with:
+          path: .esphome
+          key: ${{ runner.os }}-esphome-${{ matrix.device.config }}-${{ hashFiles(matrix.device.config) }}
+          restore-keys: |
+            ${{ runner.os }}-esphome-${{ matrix.cdevice.config }}-
+
+      - name: Compile ESPHome Binary
+        uses: esphome/build-action@main
+        with:
+          yaml-file: ${{ matrix.device.config }}
+          substitutions: |
+            main_name=${{ matrix.device.main_name }}
+            friendly_name=${{ matrix.device.friendly_name }}    

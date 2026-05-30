@@ -1,10 +1,6 @@
 packages:
-  platform:
-    url: https://github.com/rmie/esphome-projects
-    files: [common/esp32.yaml]
-  bt_proxy:
-    url: https://github.com/rmie/esphome-projects
-    files: [common/bt_proxy.yaml]  
+  platform: !include ../common/esp32.yaml
+  bt_proxy: !include ../common/bt_proxy.yaml  
     
 esphome:
   name: "${main_name}"
@@ -67,7 +63,7 @@ sensor:
   - platform: absolute_humidity
     name: "ATC-TH6 Absolute Humidity"
     temperature: atc_th6_temperature
-    humidity: atc_th6_humidity  
+    humidity: atc_th6_humidity
 
 binary_sensor:
   - platform: homeassistant
@@ -86,7 +82,6 @@ binary_sensor:
       - delayed_off: 20ms
     on_click:
       then: 
-      - light.toggle: esp_cam_light
       - homeassistant.service:
           service: switch.toggle
           data:
