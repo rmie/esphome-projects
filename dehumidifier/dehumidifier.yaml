@@ -1,7 +1,3 @@
-substitutions:
-  main_name: "dehumidifier"
-  friendly_name: "Dehumidifier"
-
 packages:
   platform: !include ../common/esp32.yaml
   bt_proxy: !include ../common/bt_proxy.yaml
@@ -12,6 +8,8 @@ external_components:
       url: https://github.com/muxa/esphome-state-machine
 
 esphome:
+  name: "${main_name}"
+  friendly_name: "${friendly_name}"
   on_boot:
     - priority: 800
       then:
