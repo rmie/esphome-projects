@@ -1,0 +1,150 @@
+packages:
+  platform: !include ../common/esp32.yaml
+  bt_proxy: !include ../common/bt_proxy.yaml
+
+esphome:
+  name: "${main_name}"
+  friendly_name: "${friendly_name}"
+  platformio_options:
+    board_build.flash_mode: dio
+  on_boot:
+    - priority: 800
+      then:
+  on_shutdown:
+    - priority: 800
+      then:
+
+uart:
+  tx_pin: GPIO01
+  rx_pin: GPIO03
+  baud_rate: 9600
+
+light:
+  - platform: esp32_rmt_led_strip
+    id: status_light
+    internal: true
+    chipset: ws2812
+    rgb_order: GRB
+    pin: GPIO18
+    num_leds: 2
+    name: "Status Light"
+    
+  - platform: partition
+    id: status_heat_pump
+    default_transition_length: 0.3s
+    segments:
+      id: status_light
+      from: 1
+      to: 1
+
+  - platform: partition
+    id: status_resistive_heater
+    default_transition_length: 0.3s
+    segments:
+      id: status_light
+      from: 0
+      to: 0
+
+switch:
+  - platform: gpio
+    pin: GPIO16
+    id: heat_pump
+    name: "Heat Pump"
+    on_turn_on:
+      - then:
+        - light.turn_on:
+            id: status_heat_pump
+            brightness: 0.25
+            red: 0.0
+            green: 0.25
+            blue: 0.0
+    on_turn_off:
+      - then:
+        - light.turn_off:
+            id: status_heat_pump 
+
+  - platform: gpio
+    pin: GPIO17
+    id: resistive_heater
+    name: "Resistive Heater"
+    on_turn_on:
+      - then:
+        - light.turn_on:
+            id: status_resistive_heater
+            brightness: 0.25
+            red: 0.0
+            green: 0.25
+            blue: 0.0
+    on_turn_off:
+      - then:
+        - light.turn_off:
+            id: status_resistive_heater
+
+sensor:
+  - platform: pzemac
+    power:
+      name: "Power"
+      id: power
+      filters:
+        - throttle: 15s
+    energy:
+      name: "Energy"
+      filters:
+        - throttle: 15s      
+    current:
+      name: "Current"
+      id: current
+      entity_category: diagnostic
+      accuracy_decimals: 3
+      filters:
+        - exponential_moving_average: 
+            alpha: 0.1
+            send_every: 15
+    voltage:
+      name: "Voltage"
+      id: voltage
+      entity_category: diagnostic
+      accuracy_decimals: 2
+      filters:
+        - exponential_moving_average: 
+            alpha: 0.1
+            send_every: 15  
+    frequency:
+      name: "Frequency"
+      entity_category: diagnostic
+      accuracy_decimals: 3
+      filters:
+        - exponential_moving_average: 
+            alpha: 0.01
+            send_every: 15     
+    power_factor:
+      name: "Power Factor"
+      id: power_factor
+      entity_category: diagnostic
+      filters:
+        - throttle: 15s         
+    update_interval: 1s
+
+  - platform: template  
+    name: "Apparent Power"
+    id: apparent_power
+    lambda: |-
+      return ( id(voltage).raw_state * id(current).raw_state );
+    unit_of_measurement: "VA"
+    accuracy_decimals: 2
+    device_class: apparent_power
+    icon: "mdi:flash"
+    update_interval: 15s
+    entity_category: diagnostic
+
+  - platform: template  
+    name: "Reactive Power"
+    id: reactive_power
+    lambda: |-
+      return ( sqrt(id(apparent_power).state * id(apparent_power).state - id(power).state * id(power).state) );
+    unit_of_measurement: "VAr"
+    accuracy_decimals: 2
+    device_class: reactive_power
+    icon: "mdi:flash"
+    update_interval: 15s
+    entity_category: diagnostic
