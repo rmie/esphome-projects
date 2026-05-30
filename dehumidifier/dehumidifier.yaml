@@ -1,0 +1,436 @@
+substitutions:
+  main_name: "dehumidifier"
+  friendly_name: "Dehumidifier"
+
+packages:
+  platform:
+    url: https://github.com/rmie/esphome-projects
+    files: [common/esp32.yaml]
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/muxa/esphome-state-machine
+
+esphome:
+  name: "${main_name}"
+  friendly_name: "${friendly_name}"
+  on_boot:
+    - priority: 800
+      then:
+        - lambda: |-
+            id(relay).turn_off();
+            id(relay_status).publish_state("off");
+            id(states).set("ALWAYS_OFF");
+  on_shutdown:
+    - priority: 800
+      then:
+        - lambda: |-
+            id(relay).turn_off();
+            id(relay_status).publish_state("off");
+            id(states).set("ALWAYS_OFF");
+
+i2c:
+  sda: GPIO21
+  scl: GPIO22
+  scan: true
+
+uart:
+  tx_pin: GPIO01
+  rx_pin: GPIO03
+  baud_rate: 9600
+
+globals:
+  - id: relay_total_on
+    type: long
+    restore_value: yes
+    initial_value: '0'
+
+  - id: relay_last_on
+    type: time_t
+    initial_value: '0'  
+
+output:
+  - platform: gpio
+    id: relay
+    pin: GPIO16
+
+state_machine:
+  - name: States
+    id: states
+    diagram: mermaid
+    states:
+      - name: ALWAYS_OFF
+        on_enter:
+          then:
+            - lambda: |-
+                id(relay).turn_off();
+                id(relay_total_on) += (id(relay_last_on) == 0LL ? 0LL : ha_time->utcnow().timestamp - id(relay_last_on));
+                id(relay_last_on) = 0;
+            - text_sensor.template.publish:
+                id: relay_status
+                state: "off"
+        on_set:
+          lambda: |-
+            id(relay).turn_off();
+            id(relay_total_on) += (id(relay_last_on) == 0LL ? 0LL : ha_time->utcnow().timestamp - id(relay_last_on));
+            id(relay_last_on) = 0;            
+            id(relay_status).publish_state("off");                           
+      - name: ALWAYS_ON
+        on_enter:
+          lambda: |-
+            id(relay).turn_on();
+            id(relay_last_on) = ha_time->utcnow().timestamp;
+            id(relay_status).publish_state("on");
+      - name: ALWAYS_ON_FULL
+        on_enter:
+          then:
+            - lambda: |-
+                id(relay).turn_on();
+                id(relay_total_on) += (id(relay_last_on) == 0LL ? 0LL : ha_time->utcnow().timestamp - id(relay_last_on));
+                id(relay_last_on) = 0;
+            - delay: 30s                
+            - text_sensor.template.publish:
+                id: relay_status
+                state: "full"
+      - name: ALWAYS_OFF_FULL
+        on_enter:
+          then:
+            - lambda: |-
+                id(relay).turn_on();
+                id(relay_total_on) += (id(relay_last_on) == 0LL ? 0LL : ha_time->utcnow().timestamp - id(relay_last_on));
+                id(relay_last_on) = 0;
+            - delay: 30s               
+            - text_sensor.template.publish:
+                id: relay_status
+                state: "full"
+      - name: AUTO_OFF
+        on_enter:
+          lambda: |-
+            id(relay).turn_off();
+            id(relay_total_on) += (id(relay_last_on) == 0LL ? 0LL : ha_time->utcnow().timestamp - id(relay_last_on));
+            id(relay_last_on) = 0;
+            id(relay_status).publish_state("idle");
+      - name: AUTO_ON
+        on_enter:
+          lambda: |-
+            id(relay).turn_on();
+            id(relay_last_on) = ha_time->utcnow().timestamp;
+            id(relay_status).publish_state("running");
+      - name: AUTO_FULL
+        on_enter:
+          then:          
+            - lambda: |-
+                id(relay).turn_on();
+                id(relay_total_on) += (id(relay_last_on) == 0LL ? 0LL : ha_time->utcnow().timestamp - id(relay_last_on));
+                id(relay_last_on) = 0;
+            - delay: 30s               
+            - text_sensor.template.publish:
+                id: relay_status
+                state: "full"
+    inputs:
+      - name: MODE_OFF
+        transitions:
+          - ALWAYS_ON -> ALWAYS_OFF
+          - AUTO_ON -> ALWAYS_OFF
+          - AUTO_OFF -> ALWAYS_OFF
+          - AUTO_FULL -> ALWAYS_OFF_FULL
+          - ALWAYS_ON_FULL -> ALWAYS_OFF_FULL
+      - name: MODE_ON
+        transitions:
+          - ALWAYS_OFF -> ALWAYS_ON
+          - AUTO_ON -> ALWAYS_ON
+          - AUTO_OFF -> ALWAYS_ON
+          - AUTO_FULL -> ALWAYS_ON_FULL
+          - ALWAYS_OFF_FULL -> ALWAYS_ON_FULL
+      - name: MODE_AUTO
+        transitions:
+          - ALWAYS_OFF -> AUTO_OFF
+          - ALWAYS_ON -> AUTO_ON
+          - ALWAYS_OFF_FULL -> AUTO_FULL
+          - ALWAYS_ON_FULL -> AUTO_FULL
+      - name: POWER_LOW
+        transitions:
+          - AUTO_FULL -> AUTO_FULL
+          - AUTO_OFF -> AUTO_OFF
+          - ALWAYS_ON_FULL -> ALWAYS_ON_FULL
+          - ALWAYS_OFF_FULL -> ALWAYS_OFF_FULL
+          - ALWAYS_OFF -> ALWAYS_OFF
+          - AUTO_ON -> AUTO_FULL
+          - ALWAYS_ON -> ALWAYS_ON_FULL
+      - name: POWER_HIGH
+        transitions:
+          - AUTO_ON -> AUTO_ON
+          - AUTO_OFF -> AUTO_OFF
+          - ALWAYS_ON -> ALWAYS_ON
+          - ALWAYS_OFF -> ALWAYS_OFF
+          - AUTO_FULL -> AUTO_ON
+          - ALWAYS_ON_FULL -> ALWAYS_ON
+          - ALWAYS_OFF_FULL -> ALWAYS_OFF
+      - name: BELOW
+        transitions:
+          - AUTO_ON -> AUTO_OFF
+          - AUTO_OFF -> AUTO_OFF
+          - ALWAYS_OFF -> ALWAYS_OFF
+          - ALWAYS_ON -> ALWAYS_ON
+          - ALWAYS_ON_FULL -> ALWAYS_ON_FULL
+          - ALWAYS_OFF_FULL -> ALWAYS_OFF_FULL
+          - AUTO_FULL -> AUTO_FULL
+      - name: ABOVE
+        transitions:
+          - AUTO_OFF -> AUTO_ON
+          - AUTO_ON -> AUTO_ON
+          - ALWAYS_OFF -> ALWAYS_OFF
+          - ALWAYS_ON -> ALWAYS_ON
+          - ALWAYS_ON_FULL -> ALWAYS_ON_FULL
+          - ALWAYS_OFF_FULL -> ALWAYS_OFF_FULL
+          - AUTO_FULL -> AUTO_FULL
+
+select:
+  - platform: template
+    id: mode
+    name: "Mode"
+    options:
+      - "on"
+      - "auto"
+      - "off"
+    on_value: 
+      then: 
+        - lambda: |-
+            if(id(mode).current_option() == "off") {
+              id(states).transition("MODE_OFF");
+            } else if(id(mode).current_option() == "on") {
+              id(states).transition("MODE_ON");
+            } else {
+              id(states).transition("MODE_AUTO");
+            }
+    initial_option: "auto"
+    optimistic: True
+    restore_value: True  
+
+number:
+  - platform: template
+    id: setpoint
+    name: "Setpoint"
+    device_class: HUMIDITY
+    optimistic: true
+    min_value: 20
+    max_value: 80
+    step: 5
+    restore_value: True
+
+  - platform: template
+    id: hysteresis
+    name: "Hysteresis"
+    device_class: HUMIDITY
+    optimistic: true
+    min_value: 5
+    max_value: 15
+    step: 1
+    restore_value: True
+    
+sensor:
+  - platform: pzemac
+    power:
+      name: "Power"
+      id: power
+      filters:
+        - throttle: 15s      
+      on_raw_value: 
+        then:
+          - if:
+              condition:
+                lambda: 'return id(power).state < 5;'
+              then:
+                - lambda: 'id(states).transition("POWER_LOW");'
+              else:
+                - lambda: 'id(states).transition("POWER_HIGH");'
+    energy:
+      name: "Energy"
+      filters:
+        - throttle: 15s      
+    current:
+      name: "Current"
+      id: current
+      entity_category: diagnostic
+      accuracy_decimals: 3
+      filters:
+        - exponential_moving_average: 
+            alpha: 0.1
+            send_every: 15
+    voltage:
+      name: "Voltage"
+      id: voltage
+      entity_category: diagnostic
+      accuracy_decimals: 2
+      filters:
+        - exponential_moving_average: 
+            alpha: 0.1
+            send_every: 15  
+    frequency:
+      name: "Frequency"
+      entity_category: diagnostic
+      accuracy_decimals: 3
+      filters:
+        - exponential_moving_average: 
+            alpha: 0.01
+            send_every: 15     
+    power_factor:
+      name: "Power Factor"
+      id: power_factor
+      filters:
+        - throttle: 15s      
+      entity_category: diagnostic        
+    update_interval: 1s
+
+  - platform: aht10
+    variant: AHT20
+    temperature:
+      name: "Temperature"
+      id: temerature
+      accuracy_decimals: 1
+      filters:
+        - exponential_moving_average: 
+            alpha: 0.01
+            send_every: 60 
+    humidity:
+      id: humidity
+      name: "Humidity"
+      accuracy_decimals: 1
+      on_raw_value: 
+        - lambda: |-
+            if (id(humidity).state < id(setpoint).state) {
+              id(states).transition("BELOW");
+            } else if (id(humidity).state > id(setpoint).state + id(hysteresis).state) {
+              id(states).transition("ABOVE");
+            }                
+      filters:
+        - exponential_moving_average: 
+            alpha: 0.01
+            send_every: 60 
+    update_interval: 1s
+
+  - platform: template
+    name: "Saturation Vapor Pressure"
+    id: svp
+    entity_category: diagnostic
+    lambda: |-
+      return 6.112 * std::exp((17.67 * id(temerature).state) / (id(temerature).state + 243.5));
+    unit_of_measurement: "hPa"
+    device_class: pressure
+    icon: "mdi:gauge"
+    accuracy_decimals: 1
+    update_interval: 1s
+    filters:
+      - exponential_moving_average: 
+          alpha: 0.01
+          send_every: 60
+
+  - platform: template
+    name: "Vapor Pressure"
+    id: vp
+    entity_category: diagnostic
+    lambda: |-
+      return id(humidity).raw_state/100.0 * id(svp).raw_state;
+    unit_of_measurement: "hPa"
+    device_class: pressure
+    icon: "mdi:gauge"
+    accuracy_decimals: 1
+    update_interval: 1s
+    filters:
+      - exponential_moving_average: 
+          alpha: 0.01
+          send_every: 60
+
+  - platform: template
+    name: "Absolute humidity"
+    id: aH
+    lambda: |-
+      ESP_LOGD(
+        "Absolute humidity",
+        "T:%f relH:%f vp:%f",
+        id(temerature).raw_state, id(humidity).raw_state, id(vp).raw_state
+      );
+      return 1000.0 * 100.0 * id(vp).raw_state / (461.5 * (id(temerature).raw_state + 273.15));
+    unit_of_measurement: "g/m³"
+    icon: "mdi:water"
+    accuracy_decimals: 1
+    update_interval: 1s  
+    filters:
+      - exponential_moving_average: 
+          alpha: 0.01
+          send_every: 60
+
+  - platform: template
+    name: "Dew point"
+    id: dewPoint
+    lambda: |-
+      float t = std::log(id(vp).raw_state / 6.112);
+      ESP_LOGD(
+        "Dew point",
+        "T:%f relH:%f vp:%f t:%f",
+        id(temerature).raw_state, id(humidity).raw_state, id(aH).raw_state, id(vp).raw_state, t
+      );
+      return (243.12 * t) / (17.67 - t);
+    unit_of_measurement: "°C"
+    device_class: temperature
+    icon: "mdi:thermometer-water"
+    accuracy_decimals: 1
+    update_interval: 1s 
+    filters:
+      - exponential_moving_average: 
+          alpha: 0.01
+          send_every: 60
+
+  - platform: template
+    name: "Operation hours"
+    id: operation_hours
+    lambda: |-
+      ESP_LOGD(
+        "operation_hours.lambda",
+        "now:%lld relay_last_on:%lld relay_total_on:%ld",
+        ha_time->utcnow().timestamp, id(relay_last_on), id(relay_total_on)
+      );     
+      return (
+        id(relay_total_on) + (id(relay_last_on) == 0LL ? 0LL : ha_time->utcnow().timestamp - id(relay_last_on))
+      ) / 3600.0;
+    unit_of_measurement: "h"
+    accuracy_decimals: 4
+    device_class: duration
+    icon: "mdi:timer-outline"
+    update_interval: 15s
+    entity_category: diagnostic
+
+  - platform: template  
+    name: "Apparent Power"
+    id: apparent_power
+    lambda: |-
+      return ( id(voltage).raw_state * id(current).raw_state );
+    unit_of_measurement: "VA"
+    accuracy_decimals: 2
+    device_class: apparent_power
+    icon: "mdi:flash"
+    update_interval: 15s
+    entity_category: diagnostic
+
+  - platform: template  
+    name: "Reactive Power"
+    id: reactive_power
+    lambda: |-
+      return ( sqrt(id(apparent_power).state * id(apparent_power).state - id(power).state * id(power).state) );
+    unit_of_measurement: "VAr"
+    accuracy_decimals: 2
+    device_class: reactive_power
+    icon: "mdi:flash"
+    update_interval: 15s
+    entity_category: diagnostic
+
+text_sensor:
+  - platform: template
+    id: relay_status
+    name: "Status"
+
+  - platform: state_machine
+    name: "State"
+    id: state_machine_state
+    entity_category: diagnostic
