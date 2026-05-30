@@ -5,20 +5,10 @@ packages:
   bt_proxy:
     url: https://github.com/rmie/esphome-projects
     files: [common/bt_proxy.yaml]  
-    
+
 esphome:
   name: "${main_name}"
   friendly_name: "${friendly_name}"
-
-esp32_ble_tracker:
-  scan_parameters:
-    active: false
-    interval: 640ms
-    window: 560ms
-    
-bluetooth_proxy:
-  active: true
-  connection_slots: 3
 
 sensor:
   - platform: bthome_mithermometer
