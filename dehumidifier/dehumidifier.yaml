@@ -4,6 +4,7 @@ substitutions:
 
 packages:
   platform: !include ../common/esp32.yaml
+  bt_proxy: !include ../common/bt_proxy.yaml
 
 external_components:
   - source:
