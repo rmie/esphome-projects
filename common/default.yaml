@@ -8,6 +8,8 @@ web_server:
 
 prometheus:
 
+api:
+
 time:
   - platform: homeassistant
     id: ha_time

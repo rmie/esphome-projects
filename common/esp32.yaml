@@ -1,7 +1,5 @@
 packages:
-  management:
-    url: https://github.com/rmie/esphome-projects
-    files: [common/all.yaml]  
+  management: !include all.yaml  
 
 esp32:
   board: esp32dev
