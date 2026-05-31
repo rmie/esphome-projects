@@ -5,7 +5,8 @@ packages:
 external_components:
   - source:
       type: git
-      url: https://github.com/muxa/esphome-state-machine
+      url: https://github.com/rmie/esphome-state-machine
+      ref: features/dense-definition
 
 esphome:
   name: "${main_name}"
@@ -13,17 +14,19 @@ esphome:
   on_boot:
     - priority: 800
       then:
-        - lambda: |-
-            id(relay).turn_off();
-            id(relay_status).publish_state("off");
-            id(states).set("ALWAYS_OFF");
+        - output.turn_off: relay
+        - text_sensor.template.publish:
+            id: relay_status
+            state: "off"
+        - state_machine.set: ALWAYS_OFF
   on_shutdown:
     - priority: 800
       then:
-        - lambda: |-
-            id(relay).turn_off();
-            id(relay_status).publish_state("off");
-            id(states).set("ALWAYS_OFF");
+        - output.turn_off: relay
+        - text_sensor.template.publish:
+            id: relay_status
+            state: "off"
+        - state_machine.set: ALWAYS_OFF
 
 i2c:
   sda: GPIO21
@@ -53,133 +56,104 @@ output:
 state_machine:
   - name: States
     id: states
+    initial_state: ALWAYS_OFF
     diagram: mermaid
     states:
       - name: ALWAYS_OFF
         on_enter:
-          then:
-            - lambda: |-
-                id(relay).turn_off();
-                id(relay_total_on) += (id(relay_last_on) == 0LL ? 0LL : ha_time->utcnow().timestamp - id(relay_last_on));
-                id(relay_last_on) = 0;
-            - text_sensor.template.publish:
-                id: relay_status
-                state: "off"
-        on_set:
-          lambda: |-
-            id(relay).turn_off();
-            id(relay_total_on) += (id(relay_last_on) == 0LL ? 0LL : ha_time->utcnow().timestamp - id(relay_last_on));
-            id(relay_last_on) = 0;            
-            id(relay_status).publish_state("off");                           
+          - output.turn_off: relay
+          - lambda: |-
+              id(relay_total_on) += (id(relay_last_on) == 0LL ? 0LL : ha_time->utcnow().timestamp - id(relay_last_on));
+              id(relay_last_on) = 0;
+          - text_sensor.template.publish:
+              id: relay_status
+              state: "off"
       - name: ALWAYS_ON
         on_enter:
-          lambda: |-
-            id(relay).turn_on();
-            id(relay_last_on) = ha_time->utcnow().timestamp;
-            id(relay_status).publish_state("on");
+          - output.turn_on: relay
+          - lambda: 'id(relay_last_on) = ha_time->utcnow().timestamp;'
+          - text_sensor.template.publish:
+              id: relay_status
+              state: "on"
       - name: ALWAYS_ON_FULL
         on_enter:
-          then:
-            - lambda: |-
-                id(relay).turn_on();
-                id(relay_total_on) += (id(relay_last_on) == 0LL ? 0LL : ha_time->utcnow().timestamp - id(relay_last_on));
-                id(relay_last_on) = 0;
-            - delay: 30s                
-            - text_sensor.template.publish:
-                id: relay_status
-                state: "full"
+          - output.turn_on: relay
+          - lambda: |-
+              id(relay_total_on) += (id(relay_last_on) == 0LL ? 0LL : ha_time->utcnow().timestamp - id(relay_last_on));
+              id(relay_last_on) = 0;
+          - delay: 30s
+          - text_sensor.template.publish:
+              id: relay_status
+              state: "full"
       - name: ALWAYS_OFF_FULL
         on_enter:
-          then:
-            - lambda: |-
-                id(relay).turn_on();
-                id(relay_total_on) += (id(relay_last_on) == 0LL ? 0LL : ha_time->utcnow().timestamp - id(relay_last_on));
-                id(relay_last_on) = 0;
-            - delay: 30s               
-            - text_sensor.template.publish:
-                id: relay_status
-                state: "full"
+          - output.turn_on: relay
+          - lambda: |-
+              id(relay_total_on) += (id(relay_last_on) == 0LL ? 0LL : ha_time->utcnow().timestamp - id(relay_last_on));
+              id(relay_last_on) = 0;
+          - delay: 30s
+          - text_sensor.template.publish:
+              id: relay_status
+              state: "full"
       - name: AUTO_OFF
         on_enter:
-          lambda: |-
-            id(relay).turn_off();
-            id(relay_total_on) += (id(relay_last_on) == 0LL ? 0LL : ha_time->utcnow().timestamp - id(relay_last_on));
-            id(relay_last_on) = 0;
-            id(relay_status).publish_state("idle");
+          - output.turn_off: relay
+          - lambda: |-
+              id(relay_total_on) += (id(relay_last_on) == 0LL ? 0LL : ha_time->utcnow().timestamp - id(relay_last_on));
+              id(relay_last_on) = 0;
+          - text_sensor.template.publish:
+              id: relay_status
+              state: "idle"
       - name: AUTO_ON
         on_enter:
-          lambda: |-
-            id(relay).turn_on();
-            id(relay_last_on) = ha_time->utcnow().timestamp;
-            id(relay_status).publish_state("running");
+          - output.turn_on: relay
+          - lambda: 'id(relay_last_on) = ha_time->utcnow().timestamp;'
+          - text_sensor.template.publish:
+              id: relay_status
+              state: "running"
       - name: AUTO_FULL
         on_enter:
-          then:          
-            - lambda: |-
-                id(relay).turn_on();
-                id(relay_total_on) += (id(relay_last_on) == 0LL ? 0LL : ha_time->utcnow().timestamp - id(relay_last_on));
-                id(relay_last_on) = 0;
-            - delay: 30s               
-            - text_sensor.template.publish:
-                id: relay_status
-                state: "full"
+          - output.turn_on: relay
+          - lambda: |-
+              id(relay_total_on) += (id(relay_last_on) == 0LL ? 0LL : ha_time->utcnow().timestamp - id(relay_last_on));
+              id(relay_last_on) = 0;
+          - delay: 30s
+          - text_sensor.template.publish:
+              id: relay_status
+              state: "full"
     inputs:
       - name: MODE_OFF
         transitions:
-          - ALWAYS_ON -> ALWAYS_OFF
-          - AUTO_ON -> ALWAYS_OFF
-          - AUTO_OFF -> ALWAYS_OFF
-          - AUTO_FULL -> ALWAYS_OFF_FULL
-          - ALWAYS_ON_FULL -> ALWAYS_OFF_FULL
+          - ALWAYS_ON,AUTO_ON,AUTO_OFF -> ALWAYS_OFF
+          - AUTO_FULL,ALWAYS_ON_FULL -> ALWAYS_OFF_FULL
       - name: MODE_ON
         transitions:
-          - ALWAYS_OFF -> ALWAYS_ON
-          - AUTO_ON -> ALWAYS_ON
-          - AUTO_OFF -> ALWAYS_ON
-          - AUTO_FULL -> ALWAYS_ON_FULL
-          - ALWAYS_OFF_FULL -> ALWAYS_ON_FULL
+          - ALWAYS_OFF,AUTO_ON,AUTO_OFF -> ALWAYS_ON
+          - AUTO_FULL,ALWAYS_OFF_FULL -> ALWAYS_ON_FULL
       - name: MODE_AUTO
         transitions:
           - ALWAYS_OFF -> AUTO_OFF
           - ALWAYS_ON -> AUTO_ON
-          - ALWAYS_OFF_FULL -> AUTO_FULL
-          - ALWAYS_ON_FULL -> AUTO_FULL
+          - ALWAYS_OFF_FULL,ALWAYS_ON_FULL -> AUTO_FULL
       - name: POWER_LOW
         transitions:
-          - AUTO_FULL -> AUTO_FULL
-          - AUTO_OFF -> AUTO_OFF
-          - ALWAYS_ON_FULL -> ALWAYS_ON_FULL
-          - ALWAYS_OFF_FULL -> ALWAYS_OFF_FULL
-          - ALWAYS_OFF -> ALWAYS_OFF
+          - AUTO_FULL,AUTO_OFF,ALWAYS_ON_FULL,ALWAYS_OFF_FULL,ALWAYS_OFF ->
           - AUTO_ON -> AUTO_FULL
           - ALWAYS_ON -> ALWAYS_ON_FULL
       - name: POWER_HIGH
         transitions:
-          - AUTO_ON -> AUTO_ON
-          - AUTO_OFF -> AUTO_OFF
-          - ALWAYS_ON -> ALWAYS_ON
-          - ALWAYS_OFF -> ALWAYS_OFF
+          - AUTO_ON,AUTO_OFF,ALWAYS_ON,ALWAYS_OFF ->
           - AUTO_FULL -> AUTO_ON
           - ALWAYS_ON_FULL -> ALWAYS_ON
           - ALWAYS_OFF_FULL -> ALWAYS_OFF
       - name: BELOW
         transitions:
+          - AUTO_OFF,ALWAYS_OFF,ALWAYS_ON,ALWAYS_ON_FULL,ALWAYS_OFF_FULL,AUTO_FULL ->
           - AUTO_ON -> AUTO_OFF
-          - AUTO_OFF -> AUTO_OFF
-          - ALWAYS_OFF -> ALWAYS_OFF
-          - ALWAYS_ON -> ALWAYS_ON
-          - ALWAYS_ON_FULL -> ALWAYS_ON_FULL
-          - ALWAYS_OFF_FULL -> ALWAYS_OFF_FULL
-          - AUTO_FULL -> AUTO_FULL
       - name: ABOVE
         transitions:
+          - AUTO_ON,ALWAYS_OFF,ALWAYS_ON,ALWAYS_ON_FULL,ALWAYS_OFF_FULL,AUTO_FULL ->
           - AUTO_OFF -> AUTO_ON
-          - AUTO_ON -> AUTO_ON
-          - ALWAYS_OFF -> ALWAYS_OFF
-          - ALWAYS_ON -> ALWAYS_ON
-          - ALWAYS_ON_FULL -> ALWAYS_ON_FULL
-          - ALWAYS_OFF_FULL -> ALWAYS_OFF_FULL
-          - AUTO_FULL -> AUTO_FULL
 
 select:
   - platform: template
@@ -190,15 +164,20 @@ select:
       - "auto"
       - "off"
     on_value: 
-      then: 
-        - lambda: |-
-            if(id(mode).current_option() == "off") {
-              id(states).transition("MODE_OFF");
-            } else if(id(mode).current_option() == "on") {
-              id(states).transition("MODE_ON");
-            } else {
-              id(states).transition("MODE_AUTO");
-            }
+      then:
+        - if:
+            condition:
+              lambda: 'return id(mode).current_option() == "off";'
+            then:
+              - state_machine.transition: MODE_OFF
+            else:
+              - if:
+                  condition:
+                    lambda: 'return id(mode).current_option() == "on";'
+                  then:
+                    - state_machine.transition: MODE_ON
+                  else:
+                    - state_machine.transition: MODE_AUTO
     initial_option: "auto"
     optimistic: True
     restore_value: True  
@@ -231,15 +210,15 @@ sensor:
       id: power
       filters:
         - throttle: 15s      
-      on_raw_value: 
+      on_raw_value:
         then:
           - if:
               condition:
                 lambda: 'return id(power).state < 5;'
               then:
-                - lambda: 'id(states).transition("POWER_LOW");'
+                - state_machine.transition: POWER_LOW
               else:
-                - lambda: 'id(states).transition("POWER_HIGH");'
+                - state_machine.transition: POWER_HIGH
     energy:
       name: "Energy"
       filters:
@@ -292,13 +271,18 @@ sensor:
       id: humidity
       name: "Humidity"
       accuracy_decimals: 1
-      on_raw_value: 
-        - lambda: |-
-            if (id(humidity).state < id(setpoint).state) {
-              id(states).transition("BELOW");
-            } else if (id(humidity).state > id(setpoint).state + id(hysteresis).state) {
-              id(states).transition("ABOVE");
-            }                
+      on_raw_value:
+        - if:
+            condition:
+              lambda: 'return id(humidity).state < id(setpoint).state;'
+            then:
+              - state_machine.transition: BELOW
+            else:
+              - if:
+                  condition:
+                    lambda: 'return id(humidity).state > id(setpoint).state + id(hysteresis).state;'
+                  then:
+                    - state_machine.transition: ABOVE                
       filters:
         - exponential_moving_average: 
             alpha: 0.01
