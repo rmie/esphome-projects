@@ -1,6 +1,7 @@
 name: Test ESPHome Compile
 
 on:
+  push:
   pull_request:
     branches:
       - main
@@ -29,7 +30,10 @@ jobs:
             main_name: "dehumidifier"            
           - config: hotwater-heatpump/hotwater-heatpump.yaml
             friendly_name: "BrauchwasserWP"
-            main_name: "brauchwasserwp"              
+            main_name: "brauchwasserwp"
+          - config: testing/barrier-group.yaml
+            friendly_name: "Barrier Group"
+            main_name: "barrier-group"
 
     steps:
       - name: Checkout Code
