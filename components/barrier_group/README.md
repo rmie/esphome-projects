@@ -1,6 +1,6 @@
 # barrier_group
 
-ESPHome external component for **unanimous distributed automation**: a named command
+ESPHome external component for **unanimous distributed automation**: a named proposal
 executes on all required nodes, or on none of them.
 
 No external library required. ~400 lines of C++.
@@ -29,7 +29,7 @@ No external library required. ~400 lines of C++.
 (MC = UDP multicast group, e.g. `239.1.2.3:6543`)
 
 **Steps:**
-1. Any node calls `barrier_group.propose: COMMAND`
+1. Any node calls `barrier_group.propose: PROPOSAL`
 2. Proposer sends `PROPOSE` + its own `ACK` to the multicast group
 3. Each required node that receives `PROPOSE`: sends its own `ACK` to the multicast group
 4. As each node accumulates ACKs, it checks if all `required_nodes` have ACK'd
@@ -55,30 +55,43 @@ from the ACKs it has collected.
 
 ## Wire Format (UDP, packed structs)
 
-```
 Magic: 0x42475250  ("BGRP")
 
-PROPOSE message (fixed 68 bytes):
-  uint32   magic
-  uint32   group_id           ← stable hash of group configuration
-  uint8    type = 1
-  uint8    sender_node_id
-  uint16   pad
-  uint64_t proposal_id        ← (node_id << 56) | seq
-  char[32] command_name       ← null-terminated, max 31 chars
-  uint8[16] signature         ← truncated HMAC-SHA256 of above using PSK (if set)
+PROPOSE message (variable length, max 512 bytes):
+  Fixed Prefix Header (exactly 36 bytes):
+    uint32    magic
+    uint32    group_id           ← stable hash of group configuration
+    uint8     type = 1
+    uint8     sender_node_id
+    uint16    pad
+    uint64_t  proposal_id        ← (node_id << 56) | seq
+    uint8[16] signature          ← truncated HMAC-SHA256 (calculated over entire packet with signature zeroed)
+  Variable Payload:
+    uint8     proposal_name_len
+    char[...] proposal_name      ← (not null-terminated)
+    uint8[...] state_bytes       ← raw bytes of packed C++ state struct (defined by compile-time 'state_vars')
 
 ACK message (fixed 40 bytes):
-  uint32   magic
-  uint32   group_id           ← stable hash of group configuration
-  uint8    type = 2
-  uint8    sender_node_id
-  uint16   pad
-  uint64_t proposal_id
-  uint8    acking_node_id
-  uint8[3] pad
-  uint8[16] signature         ← truncated HMAC-SHA256 of above using PSK (if set)
-```
+  uint32    magic
+  uint32    group_id           ← stable hash of group configuration
+  uint8     type = 2
+  uint8     sender_node_id
+  uint16    pad
+  uint64_t  proposal_id
+  uint8     acking_node_id
+  uint8[3]  pad
+  uint8[16] signature          ← truncated HMAC-SHA256 of above using PSK (if set)
+
+REJECT message (fixed 40 bytes):
+  uint32    magic
+  uint32    group_id           ← stable hash of group configuration
+  uint8     type = 3
+  uint8     sender_node_id
+  uint16    pad
+  uint64_t  proposal_id
+  uint8     rejecting_node_id
+  uint8[3]  pad
+  uint8[16] signature          ← truncated HMAC-SHA256 of above using PSK (if set)
 
 All multi-byte fields little-endian (ESP32 native).
 
@@ -96,11 +109,30 @@ barrier_group:
       - dehumidifier-1     # ESPHome device names (== App.get_name())
       - dehumidifier-2
       - dehumidifier-3
-    commands:
+    proposals:
       - name: START
         required_nodes: [dehumidifier-1, dehumidifier-2, dehumidifier-3]
+        
+        # Declare state variables with primitive compile-time types
+        # Allowed types: float, double, bool, int8/uint8, int16/uint16, int32/uint32
+        state_vars:
+          target_humidity: float
+          boost_mode: bool
+        
+        accept_if: |-
+          // Optional: evaluate conditions against the type-safe 'state' struct
+          if (state.boost_mode && state.target_humidity < 40.0f) {
+            return false; // reject the proposal immediately
+          }
+          return !id(tank_full_sensor).state;
+        
         on_execute:
-          - output.turn_on: relay
+          # Trigger lambdas receive the read-only 'state' struct parameter
+          - lambda: |-
+              id(dehumidifier_target).publish_state(state.target_humidity);
+              output.turn_on: relay
+        on_timeout:
+          - logger.log: "START proposal timed out!"
       - name: STOP
         required_nodes: [dehumidifier-1, dehumidifier-2, dehumidifier-3]
         on_execute:
@@ -115,17 +147,24 @@ barrier_group:
 
 Each group is automatically isolated from other groups by a 32-bit FNV-1a hash of its configuration (including `id`, `nodes`, `port`, `multicast_group`, etc.), ensuring they can co-exist on the same port and multicast group without interfering.
 
-### Security
+### Security and Safety
 If the `key` parameter is provided:
-- **Packet Authentication**: All packets are signed using a truncated **HMAC-SHA256 (128-bit / 16-byte)** hash. Packets with invalid or missing signatures are immediately discarded.
+- **Verify-Before-Parse Packet Authentication**: Packets are authenticated using a truncated **HMAC-SHA256 (128-bit / 16-byte)** hash. The signature is located at a fixed offset (bytes 20-35) in the `PROPOSE` header, allowing the receiver to completely verify the packet before attempting to parse variable-length string payloads, preventing memory overflow/corruption exploits.
 - **Replay Protection**: The component tracks monotonic sequence numbers from each peer ID. Any replayed packet with a duplicate or older sequence number is rejected.
 
+> [!NOTE]
+> Cryptographic signature verification is currently supported on ESP32 targets (using `mbedtls`). On other platforms like ESP8266, cryptography is stubbed out and signature checks are skipped (a warning will be logged at startup if a `key` is configured).
+
+
 **Actions:**
-Propose a command to a specific group by targeting its `id`:
+Propose a proposal to a specific group by targeting its `id` and supplying state variables (if declared):
 ```yaml
 - barrier_group.propose:
     id: dehumidifiers
-    command: START
+    proposal: START
+    state:
+      target_humidity: 45.0
+      boost_mode: !lambda "return id(high_moisture_sensor).state;"
 ```
 
 **How nodes are identified:**
@@ -140,7 +179,7 @@ Propose a command to a specific group by targeting its `id`:
 barrier_group:
   - id: dehumidifiers
     nodes: [dehumidifier-1, dehumidifier-2, dehumidifier-3]
-    commands:
+    proposals:
       - name: START
         required_nodes: [dehumidifier-1, dehumidifier-2, dehumidifier-3]
         on_execute:
@@ -154,6 +193,13 @@ substitutions:
 packages:
   group: !include common/my_group.yaml
 ```
+
+---
+ 
+## Platform Compatibility
+
+- **ESP32**: Supported on both Arduino and ESP-IDF frameworks. Includes full functionality with UDP multicast via raw BSD sockets and packet signature verification (HMAC-SHA256 via `mbedtls`).
+- **ESP8266**: Supported on the Arduino framework. UDP multicast is implemented using the core's native `WiFiUDP` library. Cryptographic signature checks are stubbed out (skipped), and a warning is logged at startup if `key` is configured.
 
 ---
 

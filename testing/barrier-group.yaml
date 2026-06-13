@@ -16,7 +16,7 @@ esphome:
 
 barrier_group:
   - id: my_group
-    commands:
+    proposals:
       - name: TEST
         on_execute:
           - logger.log: "TEST executed unanimously"
@@ -26,4 +26,4 @@ interval:
     then:
       - barrier_group.propose:
           id: my_group
-          command: TEST
+          proposal: TEST

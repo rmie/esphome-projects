@@ -1,0 +1,47 @@
+external_components:
+  - source:
+      type: local
+      path: ../..
+    components: [barrier_group]
+
+esphome:
+  name: ${main_name}
+  friendly_name: ${friendly_name}
+
+logger:
+  level: VERBOSE
+
+wifi:
+  networks:
+    - ssid: "test-wifi"
+      password: "password"
+
+barrier_group:
+  - id: my_group
+    nodes: ["${main_name}"]
+    proposals:
+      - name: TEST
+        required_nodes: ["${main_name}"]
+        state_vars:
+          temp: float
+          humidity: float
+          ok: bool
+          counter: int32
+        accept_if: |-
+          return state.temp < 50.0f;
+        on_execute:
+          - logger.log:
+              format: "TEST executed! temp: %.1f, humidity: %.1f, ok: %d, counter: %d"
+              args: [ "state.temp", "state.humidity", "state.ok", "state.counter" ]
+
+interval:
+  - interval: 5s
+    then:
+      - barrier_group.propose:
+          id: my_group
+          proposal: TEST
+          state:
+            temp: 23.4
+            humidity: 45.2
+            ok: true
+            counter: !lambda "return 42;"

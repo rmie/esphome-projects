@@ -2,10 +2,16 @@
 
 #include "esphome/core/component.h"
 #include "esphome/core/automation.h"
+#ifdef USE_ESP8266
+#include <WiFiUdp.h>
+#else
 #include "lwip/sockets.h"
+#endif
+
 #include <vector>
 #include <set>
 #include <string>
+#include <functional>
 
 namespace esphome {
 namespace barrier_group {
@@ -13,6 +19,7 @@ namespace barrier_group {
 static constexpr uint32_t MAGIC       = 0x42475250U;  // "BGRP"
 static constexpr uint8_t  MSG_PROPOSE = 1;
 static constexpr uint8_t  MSG_ACK     = 2;
+static constexpr uint8_t  MSG_REJECT  = 3;
 
 struct __attribute__((packed)) WireHeader {
     uint32_t magic;
@@ -22,17 +29,24 @@ struct __attribute__((packed)) WireHeader {
     uint16_t pad;
 };
 
-struct __attribute__((packed)) ProposeMsg {
+struct __attribute__((packed)) ProposeFixedHeader {
     WireHeader header;
     uint64_t   proposal_id;
-    char       command[32];   // null-terminated, max 31 chars
-    uint8_t    signature[16]; // truncated HMAC-SHA256
-};
+    uint8_t    signature[16]; // Fixed location signature
+}; // Size is exactly 36 bytes
 
 struct __attribute__((packed)) AckMsg {
     WireHeader header;
     uint64_t   proposal_id;
     uint8_t    acking_node_id;
+    uint8_t    pad[3];
+    uint8_t    signature[16]; // truncated HMAC-SHA256
+};
+
+struct __attribute__((packed)) RejectMsg {
+    WireHeader header;
+    uint64_t   proposal_id;
+    uint8_t    rejecting_node_id;
     uint8_t    pad[3];
     uint8_t    signature[16]; // truncated HMAC-SHA256
 };
@@ -44,15 +58,19 @@ struct Node {
     std::string name;  // ESPHome device name (== App.get_name() on that device)
 };
 
-struct Command {
+struct Proposal {
     std::string          name;
     std::vector<uint8_t> required_nodes;
-    Trigger<>           *on_execute_trigger{nullptr};
+    size_t               state_size{0};
+    std::function<void(const void *)> on_execute_callback{nullptr};
+    Trigger<>           *on_timeout_trigger{nullptr};
+    std::function<bool(const void *)> accept_if_lambda{nullptr};
 };
 
 struct PendingProposal {
     uint64_t           proposal_id;
-    std::string        command_name;
+    std::string        proposal_name;
+    std::string        state; // Stores raw bytes of state struct
     std::set<uint8_t>  acked_by;
     uint32_t           created_ms;
 };
@@ -71,10 +89,13 @@ class BarrierGroupComponent : public Component {
     void add_node(uint8_t id, const std::string &name) {
         nodes_.push_back({id, name});
     }
-    void add_command(const std::string &name,
-                     const std::vector<uint8_t> &required_nodes,
-                     Trigger<> *trigger) {
-        commands_.push_back({name, required_nodes, trigger});
+    void add_proposal(const std::string &name,
+                      const std::vector<uint8_t> &required_nodes,
+                      size_t state_size,
+                      std::function<void(const void *)> on_execute_callback,
+                      Trigger<> *timeout_trigger,
+                      std::function<bool(const void *)> accept_if_lambda) {
+        proposals_.push_back({name, required_nodes, state_size, std::move(on_execute_callback), timeout_trigger, std::move(accept_if_lambda)});
     }
 
     // --- Component lifecycle -----------------------------------------------
@@ -83,7 +104,7 @@ class BarrierGroupComponent : public Component {
     float get_setup_priority() const override;
 
     // --- Public API ---------------------------------------------------------
-    void propose(const std::string &command_name);
+    void propose(const std::string &proposal_name, const void *state_ptr = nullptr, size_t state_size = 0);
 
  protected:
     uint32_t    group_id_{0};
@@ -96,45 +117,49 @@ class BarrierGroupComponent : public Component {
     uint32_t    seq_{0};
 
     std::vector<Node>            nodes_;
-    std::vector<Command>         commands_;
+    std::vector<Proposal>        proposals_;
     std::vector<PendingProposal> pending_;
     std::set<uint64_t>           seen_proposals_;
 
+#ifdef USE_ESP8266
+    WiFiUDP udp_;
+#else
     int sock_{-1};
+#endif
+
 
     // --- Internal -----------------------------------------------------------
     void recv_udp_();
-    void handle_propose_(const ProposeMsg &msg);
+    void handle_propose_(const uint8_t *buf, size_t len);
     void handle_ack_(const AckMsg &msg);
+    void handle_reject_(const RejectMsg &msg);
     void send_multicast_(const void *data, size_t len);
     void check_unanimous_(PendingProposal &p);
     void check_timeouts_();
 
-    Command *find_command_(const std::string &name);
+    Proposal *find_proposal_(const std::string &name);
     void compute_signature_(const void *data, size_t len, uint8_t *sig_out);
     bool verify_signature_(const void *data, size_t len, const uint8_t *sig_expected);
 };
 
 // ---------------------------------------------------------------------------
-// Action: barrier_group.propose: COMMAND_NAME
+// Triggers: templated for compile-time type-safety
 // ---------------------------------------------------------------------------
-template<typename... Ts>
-class BarrierGroupProposeAction : public Action<Ts...> {
+template<typename T>
+class BarrierGroupOnExecuteTrigger : public Trigger<const T &> {
  public:
-    BarrierGroupProposeAction(BarrierGroupComponent *parent, std::string command)
-        : parent_(parent), command_(std::move(command)) {}
-    void play(Ts... x) override { this->parent_->propose(this->command_); }
- private:
-    BarrierGroupComponent *parent_;
-    std::string            command_;
+    explicit BarrierGroupOnExecuteTrigger() {}
 };
 
-// ---------------------------------------------------------------------------
-// Trigger: on_execute (fires on every required node when unanimous)
-// ---------------------------------------------------------------------------
-class BarrierGroupOnExecuteTrigger : public Trigger<> {
+template<>
+class BarrierGroupOnExecuteTrigger<void> : public Trigger<> {
  public:
-    explicit BarrierGroupOnExecuteTrigger(BarrierGroupComponent * /*parent*/) {}
+    explicit BarrierGroupOnExecuteTrigger() {}
+};
+
+class BarrierGroupOnTimeoutTrigger : public Trigger<> {
+ public:
+    explicit BarrierGroupOnTimeoutTrigger() {}
 };
 
 }  // namespace barrier_group

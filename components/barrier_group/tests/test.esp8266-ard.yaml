@@ -1,0 +1,8 @@
+substitutions:
+  main_name: "test-esp8266-ard"
+  friendly_name: "Test ESP8266 Arduino"
+
+esp8266:
+  board: nodemcuv2
+
+<<: !include common.yaml

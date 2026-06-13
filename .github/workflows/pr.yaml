@@ -11,12 +11,14 @@ on:
       - 'testing/**.yaml'
       - 'dehumidifier/**.yaml'
       - 'hotwater-heatpump/**.yaml'
+      - 'components/barrier_group/**'
 
 jobs:
   esphome-compile:
     runs-on: ubuntu-latest
     
     strategy:
+      fail-fast: false
       matrix:
         device: 
           - config: testing/esp32.yaml
@@ -34,6 +36,21 @@ jobs:
           - config: testing/barrier-group.yaml
             friendly_name: "Barrier Group"
             main_name: "barrier-group"
+          - config: components/barrier_group/tests/test.esp32-ard.yaml
+            friendly_name: "Barrier Group ESP32 Arduino"
+            main_name: "bg-esp32-ard"
+          - config: components/barrier_group/tests/test.esp32-idf.yaml
+            friendly_name: "Barrier Group ESP32 IDF"
+            main_name: "bg-esp32-idf"
+          - config: components/barrier_group/tests/test.esp32-c3-ard.yaml
+            friendly_name: "Barrier Group ESP32-C3 Arduino"
+            main_name: "bg-esp32-c3-ard"
+          - config: components/barrier_group/tests/test.esp32-c3-idf.yaml
+            friendly_name: "Barrier Group ESP32-C3 IDF"
+            main_name: "bg-esp32-c3-idf"
+          - config: components/barrier_group/tests/test.esp8266-ard.yaml
+            friendly_name: "Barrier Group ESP8266 Arduino"
+            main_name: "bg-esp8266-ard"
 
     steps:
       - name: Checkout Code
