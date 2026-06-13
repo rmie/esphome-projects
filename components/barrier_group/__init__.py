@@ -19,6 +19,9 @@ BarrierGroupOnExecuteTrigger = barrier_group_ns.class_(
 BarrierGroupOnTimeoutTrigger = barrier_group_ns.class_(
     "BarrierGroupOnTimeoutTrigger", automation.Trigger.template()
 )
+BarrierGroupOnRejectTrigger = barrier_group_ns.class_(
+    "BarrierGroupOnRejectTrigger", automation.Trigger.template()
+)
 
 # ── config keys ───────────────────────────────────────────────────────────────
 CONF_NODES               = "nodes"
@@ -30,6 +33,7 @@ CONF_PROPOSALS           = "proposals"
 CONF_REQUIRED_NODES      = "required_nodes"
 CONF_ON_EXECUTE          = "on_execute"
 CONF_ON_TIMEOUT          = "on_timeout"
+CONF_ON_REJECT           = "on_reject"
 CONF_ACCEPT_IF           = "accept_if"
 CONF_KEY                 = "key"
 CONF_STATE_VARS          = "state_vars"
@@ -63,6 +67,9 @@ PROPOSAL_SCHEMA = cv.Schema(
         ),
         cv.Optional(CONF_ON_TIMEOUT):     automation.validate_automation(
             {cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(BarrierGroupOnTimeoutTrigger)}
+        ),
+        cv.Optional(CONF_ON_REJECT):      automation.validate_automation(
+            {cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(BarrierGroupOnRejectTrigger)}
         ),
         cv.Optional(CONF_ACCEPT_IF):      cv.returning_lambda,
         cv.Optional(CONF_STATE_VARS):     cv.Schema(
@@ -152,6 +159,11 @@ def _validate_group_list(config_list):
                         existing_cmd[CONF_ON_TIMEOUT].extend(cmd[CONF_ON_TIMEOUT])
                     else:
                         existing_cmd[CONF_ON_TIMEOUT] = cmd[CONF_ON_TIMEOUT]
+                if CONF_ON_REJECT in cmd:
+                    if CONF_ON_REJECT in existing_cmd:
+                        existing_cmd[CONF_ON_REJECT].extend(cmd[CONF_ON_REJECT])
+                    else:
+                        existing_cmd[CONF_ON_REJECT] = cmd[CONF_ON_REJECT]
                 if CONF_ACCEPT_IF in cmd:
                     existing_cmd[CONF_ACCEPT_IF] = cmd[CONF_ACCEPT_IF]
                 if CONF_STATE_VARS in cmd:
@@ -304,6 +316,13 @@ async def to_code(config):
                     await automation.build_automation(timeout_trigger, [], action_conf)
             timeout_trigger_expr = timeout_trigger if timeout_trigger is not None else cg.RawExpression("nullptr")
 
+            reject_trigger = None
+            if CONF_ON_REJECT in command:
+                for action_conf in command[CONF_ON_REJECT]:
+                    reject_trigger = cg.new_Pvariable(action_conf[CONF_TRIGGER_ID])
+                    await automation.build_automation(reject_trigger, [], action_conf)
+            reject_trigger_expr = reject_trigger if reject_trigger is not None else cg.RawExpression("nullptr")
+
             accept_if_expr = cg.RawExpression("nullptr")
             if CONF_ACCEPT_IF in command:
                 if state_vars:
@@ -318,7 +337,17 @@ async def to_code(config):
                         f"[=](const void *state_ptr) -> bool {{ (void)state_ptr; return {lambda_expr}(); }}"
                     )
 
-            cg.add(var.add_proposal(command[CONF_NAME], req_nodes_expr, state_size_expr, callback_expr, timeout_trigger_expr, accept_if_expr))
+            cg.add(
+                var.add_proposal(
+                    command[CONF_NAME],
+                    req_nodes_expr,
+                    state_size_expr,
+                    callback_expr,
+                    timeout_trigger_expr,
+                    reject_trigger_expr,
+                    accept_if_expr,
+                )
+            )
 
 
 # ── barrier_group.propose action ──────────────────────────────────────────────

@@ -64,6 +64,7 @@ struct Proposal {
     size_t               state_size{0};
     std::function<void(const void *)> on_execute_callback{nullptr};
     Trigger<>           *on_timeout_trigger{nullptr};
+    Trigger<>           *on_reject_trigger{nullptr};
     std::function<bool(const void *)> accept_if_lambda{nullptr};
 };
 
@@ -94,8 +95,9 @@ class BarrierGroupComponent : public Component {
                       size_t state_size,
                       std::function<void(const void *)> on_execute_callback,
                       Trigger<> *timeout_trigger,
+                      Trigger<> *reject_trigger,
                       std::function<bool(const void *)> accept_if_lambda) {
-        proposals_.push_back({name, required_nodes, state_size, std::move(on_execute_callback), timeout_trigger, std::move(accept_if_lambda)});
+        proposals_.push_back({name, required_nodes, state_size, std::move(on_execute_callback), timeout_trigger, reject_trigger, std::move(accept_if_lambda)});
     }
 
     // --- Component lifecycle -----------------------------------------------
@@ -109,17 +111,18 @@ class BarrierGroupComponent : public Component {
  protected:
     uint32_t    group_id_{0};
     std::string key_;
-    uint32_t    peer_last_seq_[256];
+    uint64_t    peer_last_seq_[256];
     uint8_t     my_node_id_{255};  // resolved in setup() via App.get_name()
     uint16_t    port_{6543};
     uint32_t    proposal_timeout_ms_{2000};
     uint32_t    multicast_addr_{0};
-    uint32_t    seq_{0};
+    uint64_t    seq_{0};
 
     std::vector<Node>            nodes_;
     std::vector<Proposal>        proposals_;
     std::vector<PendingProposal> pending_;
-    std::set<uint64_t>           seen_proposals_;
+    uint64_t                     seen_proposals_[16]{0};
+    uint8_t                      seen_idx_{0};
 
 #ifdef USE_ESP8266
     WiFiUDP udp_;
@@ -140,6 +143,8 @@ class BarrierGroupComponent : public Component {
     Proposal *find_proposal_(const std::string &name);
     void compute_signature_(const void *data, size_t len, uint8_t *sig_out);
     bool verify_signature_(const void *data, size_t len, const uint8_t *sig_expected);
+    void add_seen_proposal_(uint64_t proposal_id);
+    bool has_seen_proposal_(uint64_t proposal_id);
 };
 
 // ---------------------------------------------------------------------------
@@ -160,6 +165,11 @@ class BarrierGroupOnExecuteTrigger<void> : public Trigger<> {
 class BarrierGroupOnTimeoutTrigger : public Trigger<> {
  public:
     explicit BarrierGroupOnTimeoutTrigger() {}
+};
+
+class BarrierGroupOnRejectTrigger : public Trigger<> {
+ public:
+    explicit BarrierGroupOnRejectTrigger() {}
 };
 
 }  // namespace barrier_group

@@ -133,6 +133,8 @@ barrier_group:
               output.turn_on: relay
         on_timeout:
           - logger.log: "START proposal timed out!"
+        on_reject:
+          - logger.log: "START proposal rejected by peer!"
       - name: STOP
         required_nodes: [dehumidifier-1, dehumidifier-2, dehumidifier-3]
         on_execute:
@@ -150,7 +152,7 @@ Each group is automatically isolated from other groups by a 32-bit FNV-1a hash o
 ### Security and Safety
 If the `key` parameter is provided:
 - **Verify-Before-Parse Packet Authentication**: Packets are authenticated using a truncated **HMAC-SHA256 (128-bit / 16-byte)** hash. The signature is located at a fixed offset (bytes 20-35) in the `PROPOSE` header, allowing the receiver to completely verify the packet before attempting to parse variable-length string payloads, preventing memory overflow/corruption exploits.
-- **Replay Protection**: The component tracks monotonic sequence numbers from each peer ID. Any replayed packet with a duplicate or older sequence number is rejected.
+- **Replay Protection**: The component tracks 56-bit sequence numbers from each peer ID. To prevent replay attacks across node reboots, the upper 32 bits of the sequence are seeded with a random boot epoch on startup. Any replayed packet with a duplicate or older sequence number is rejected.
 
 > [!NOTE]
 > Cryptographic signature verification is currently supported on ESP32 targets (using `mbedtls`). On other platforms like ESP8266, cryptography is stubbed out and signature checks are skipped (a warning will be logged at startup if a `key` is configured).
@@ -211,5 +213,4 @@ packages:
 - **UDP fire-and-forget**: packet loss on noisy Wi-Fi may cause timeout. Mitigation:
   increase `proposal_timeout_ms` and rely on ESPHome's Wi-Fi reconnect.
 - **No persistence**: if a node reboots mid-proposal, that proposal times out on peers.
-- **`seen_proposals_` set**: entries are removed on successful execution and on timeout,
-  so memory is bounded.
+- **`seen_proposals_` deduplication**: tracked via a fixed-size 16-element ring buffer (no dynamic allocations), so memory is strictly constant.

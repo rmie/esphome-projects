@@ -1,6 +1,7 @@
 #include "barrier_group.h"
 #include "esphome/core/application.h"
 #include "esphome/core/log.h"
+#include "esphome/core/helpers.h"
 #include <fcntl.h>
 #include <errno.h>
 #ifdef USE_ESP32
@@ -23,6 +24,10 @@ float BarrierGroupComponent::get_setup_priority() const {
 
 void BarrierGroupComponent::setup() {
     memset(peer_last_seq_, 0, sizeof(peer_last_seq_));
+    // Seed sequence with random boot epoch in upper 32 bits of the 56-bit sequence space.
+    // This gives us 24 bits (16.7 million) of contiguous counter before rolling into the epoch,
+    // which prevents replay attacks across reboots.
+    seq_ = static_cast<uint64_t>(random_uint32()) << 24;
 #ifndef USE_ESP32
     if (!key_.empty()) {
         ESP_LOGW(TAG, "Cryptography is not supported on this platform. Pre-shared key signature verification is disabled.");
@@ -157,7 +162,7 @@ void BarrierGroupComponent::propose(const std::string &proposal_name, const void
         p.state.assign(reinterpret_cast<const char *>(state_ptr), state_size);
     }
     pending_.push_back(std::move(p));
-    seen_proposals_.insert(proposal_id);
+    add_seen_proposal_(proposal_id);
 
     // Flood PROPOSE + our ACK to the multicast group.
     size_t name_len = proposal_name.size();
@@ -308,8 +313,8 @@ void BarrierGroupComponent::recv_udp_() {
 
 void BarrierGroupComponent::handle_propose_(const uint8_t *buf, size_t len) {
     auto *fixed = reinterpret_cast<const ProposeFixedHeader *>(buf);
-    if (seen_proposals_.count(fixed->proposal_id)) return;  // dedup
-    seen_proposals_.insert(fixed->proposal_id);
+    if (has_seen_proposal_(fixed->proposal_id)) return;  // dedup
+    add_seen_proposal_(fixed->proposal_id);
 
     uint8_t sender_id = fixed->header.sender_id;
     uint64_t seq = fixed->proposal_id & 0x00FFFFFFFFFFFFFFull;
@@ -439,8 +444,12 @@ void BarrierGroupComponent::handle_reject_(const RejectMsg &msg) {
             ESP_LOGD(TAG, "[%08X] proposal %llu rejected by node %d",
                      group_id_, id, msg.rejecting_node_id);
 
-            // Remove from pending and seen
-            seen_proposals_.erase(id);
+            Proposal *cmd = find_proposal_(p.proposal_name);
+            if (cmd != nullptr && cmd->on_reject_trigger != nullptr) {
+                cmd->on_reject_trigger->trigger();
+            }
+
+            // Remove from pending
             pending_.erase(
                 std::remove_if(pending_.begin(), pending_.end(),
                                [id](const PendingProposal &q) { return q.proposal_id == id; }),
@@ -467,9 +476,8 @@ void BarrierGroupComponent::check_unanimous_(PendingProposal &p) {
         cmd->on_execute_callback(p.state.empty() ? nullptr : p.state.data());
     }
 
-    // Remove from pending; erase from seen so the ID can't block future proposals.
+    // Remove from pending.
     uint64_t id = p.proposal_id;
-    seen_proposals_.erase(id);
     pending_.erase(
         std::remove_if(pending_.begin(), pending_.end(),
                        [id](const PendingProposal &q) { return q.proposal_id == id; }),
@@ -494,8 +502,7 @@ void BarrierGroupComponent::check_timeouts_() {
                                cmd->on_timeout_trigger->trigger();
                            }
 
-                           seen_proposals_.erase(p.proposal_id);
-                           return true;
+                            return true;
                        }),
         pending_.end());
 }
@@ -566,6 +573,18 @@ bool BarrierGroupComponent::verify_signature_(const void *data, size_t len, cons
 #else
     return true;
 #endif
+}
+
+void BarrierGroupComponent::add_seen_proposal_(uint64_t proposal_id) {
+    this->seen_proposals_[this->seen_idx_] = proposal_id;
+    this->seen_idx_ = (this->seen_idx_ + 1) % 16;
+}
+
+bool BarrierGroupComponent::has_seen_proposal_(uint64_t proposal_id) {
+    for (uint64_t id : this->seen_proposals_) {
+        if (id == proposal_id) return true;
+    }
+    return false;
 }
 
 }  // namespace barrier_group

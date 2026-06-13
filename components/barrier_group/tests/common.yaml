@@ -33,6 +33,10 @@ barrier_group:
           - logger.log:
               format: "TEST executed! temp: %.1f, humidity: %.1f, ok: %d, counter: %d"
               args: [ "state.temp", "state.humidity", "state.ok", "state.counter" ]
+        on_reject:
+          - logger.log: "TEST proposal was rejected."
+        on_timeout:
+          - logger.log: "TEST proposal timed out."
 
 interval:
   - interval: 5s
