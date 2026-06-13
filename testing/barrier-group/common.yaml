@@ -1,0 +1,6 @@
+barrier_group:
+  - id: my_group
+    nodes: [barrier-group]
+    proposals:
+      - name: TEST
+        required_nodes: [barrier-group]

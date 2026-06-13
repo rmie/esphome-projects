@@ -1,1 +1,4 @@
-.vscode
+.vscode/
+**/.esphome/
+**/__pycache__
+**/secrets.yaml

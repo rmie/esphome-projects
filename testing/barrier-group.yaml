@@ -1,0 +1,29 @@
+substitutions:
+  main_name: "barrier-group"
+  friendly_name: "Barrier Group"
+
+packages:
+  platform: !include ../common/esp32.yaml
+  bt_proxy: !include ../common/bt_proxy.yaml
+  barrier_group_common: !include barrier-group/common.yaml
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+esphome:
+
+barrier_group:
+  - id: my_group
+    proposals:
+      - name: TEST
+        on_execute:
+          - logger.log: "TEST executed unanimously"
+
+interval:
+  - interval: 5s
+    then:
+      - barrier_group.propose:
+          id: my_group
+          proposal: TEST
