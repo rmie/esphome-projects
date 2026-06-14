@@ -12,6 +12,7 @@ on:
       - 'dehumidifier/**.yaml'
       - 'hotwater-heatpump/**.yaml'
       - 'components/barrier_group/**'
+      - 'example/barrier_group/**.yaml'
 
 jobs:
   esphome-compile:
@@ -36,6 +37,12 @@ jobs:
           - config: testing/barrier-group.yaml
             friendly_name: "Barrier Group"
             main_name: "barrier-group"
+          - config: example/barrier_group/furnace.yaml
+            friendly_name: "Kitchen Furnace"
+            main_name: "furnace"
+          - config: example/barrier_group/stove.yaml
+            friendly_name: "Pellet Stove"
+            main_name: "stove"
           - config: components/barrier_group/tests/test.esp32-ard.yaml
             friendly_name: "Barrier Group ESP32 Arduino"
             main_name: "bg-esp32-ard"
@@ -63,6 +70,7 @@ jobs:
         run: |
           cat <<EOF | tee hotwater-heatpump/secrets.yaml \
                     | tee dehumidifier/secrets.yaml \
+                    | tee common/secrets.yaml \
                     > testing/secrets.yaml
           wifi_ssid: "Fake-WiFi-Network"
           wifi_password: "FakeWiFiPassword123"
@@ -74,7 +82,7 @@ jobs:
           path: .esphome
           key: ${{ runner.os }}-esphome-${{ matrix.device.config }}-${{ hashFiles(matrix.device.config) }}
           restore-keys: |
-            ${{ runner.os }}-esphome-${{ matrix.cdevice.config }}-
+            ${{ runner.os }}-esphome-${{ matrix.device.config }}-
 
       - name: Compile ESPHome Binary
         uses: esphome/build-action@main

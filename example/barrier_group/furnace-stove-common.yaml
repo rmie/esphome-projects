@@ -1,0 +1,517 @@
+substitutions:
+  led_pin: "GPIO13"
+  window_sensor_mac: "AA:BB:CC:DD:EE:FF"
+
+globals:
+  - id: local_emergency_latched
+    type: bool
+    restore_value: true
+    initial_value: 'false'
+  - id: faulty_peer_mac
+    type: uint64_t
+    restore_value: true
+    initial_value: '0'
+
+esphome:
+  on_boot:
+    - priority: 200
+      then:
+        - script.execute: update_led
+    - priority: -100
+      then:
+        - if:
+            condition:
+              lambda: |-
+                return id(local_emergency_latched);
+            then:
+              - binary_sensor.template.publish:
+                  id: local_emergency
+                  state: true
+              - state_machine.transition:
+                  id: interlock_sm
+                  input: LOCAL_EMERGENCY_DETECTED
+              - script.execute: broadcast_state
+        - if:
+            condition:
+              lambda: |-
+                return id(faulty_peer_mac) != 0;
+            then:
+              - binary_sensor.template.publish:
+                  id: peer_emergency
+                  state: true
+
+output:
+  - platform: gpio
+    id: led_gpio
+    pin:
+      number: ${led_pin}
+      inverted: true
+
+light:
+  - platform: binary
+    name: "Status LED"
+    id: status_led
+    output: led_gpio
+    internal: true
+
+packages:
+  platform: !include ../../common/esp32.yaml
+  bt_proxy: !include ../../common/bt_proxy.yaml
+
+external_components:
+  - source:
+      type: local
+      path: ../../components
+  - source:
+      type: git
+      url: https://github.com/rmie/esphome-state-machine
+      ref: features/dense-definition
+
+text_sensor:
+  - platform: state_machine
+    name: "System Status"
+    id: system_status_fsm
+    state_machine_id: interlock_sm
+
+  - platform: template
+    name: "Hardware Health"
+    id: hardware_health
+    icon: "mdi:hospital-box"
+    lambda: |-
+      if (id(local_emergency_latched)) {
+        return std::string("BRICKED (WELDED RELAY)");
+      } else {
+        return std::string("GOOD");
+      }
+    update_interval: 60s
+
+state_machine:
+  - name: "Interlock State Machine"
+    id: interlock_sm
+    initial_state: SAFE
+    diagram: mermaid
+    states:
+      - name: SAFE
+        on_enter:
+          - switch.turn_on: relay
+          - script.execute: update_led
+      - name: COMM_LOCKOUT_REJECT
+        on_enter:
+          - switch.turn_off: relay
+          - script.execute: update_led
+      - name: COMM_LOCKOUT_TIMEOUT
+        on_enter:
+          - switch.turn_off: relay
+          - script.execute: update_led
+      - name: LOCAL_EMERGENCY
+        on_enter:
+          - switch.turn_off: relay
+          - script.execute: update_led
+      - name: PEER_EMERGENCY
+        on_enter:
+          - switch.turn_off: relay
+          - script.execute: update_led
+    # ===========================================================================
+    # SAFETY DESIGN NOTE: FSM BACKSTOP
+    # The FSM inputs and transitions are intentionally restrictive. For example,
+    # CLEAR_LOCKOUT only transitions from COMM_LOCKOUT -> SAFE. No transitions are defined
+    # from LOCAL_EMERGENCY, PEER_EMERGENCY. This acts as a final
+    # safety guard.
+    # ===========================================================================
+    inputs:
+      - name: LOCKOUT_PEER_REJECT
+        transitions:
+          - "SAFE -> COMM_LOCKOUT_REJECT"
+      - name: LOCKOUT_PEER_TIMEOUT
+        transitions:
+          - "SAFE -> COMM_LOCKOUT_TIMEOUT"
+      - name: CLEAR_LOCKOUT
+        transitions:
+          - "COMM_LOCKOUT_REJECT,COMM_LOCKOUT_TIMEOUT -> SAFE"
+      - name: LOCAL_EMERGENCY_DETECTED
+        transitions:
+          - "SAFE,COMM_LOCKOUT_REJECT,COMM_LOCKOUT_TIMEOUT,PEER_EMERGENCY -> LOCAL_EMERGENCY"
+      - name: PEER_EMERGENCY_DETECTED
+        transitions:
+          - "SAFE,COMM_LOCKOUT_REJECT,COMM_LOCKOUT_TIMEOUT -> PEER_EMERGENCY"
+      - name: RESET_EMERGENCY
+        transitions:
+          - "PEER_EMERGENCY -> SAFE"
+
+# ===========================================================================
+# WARNING: SINGLE POINT OF FAILURE - LIFE SAFETY BYPASS
+# This interlock bypass relies entirely on a single wireless BLE window sensor.
+# If the sensor fails (battery dies, signal blocked, etc.) while the window is
+# CLOSED, the system fails safe by preventing simultaneous operation. However,
+# relying on a single wireless channel is a single point of failure. Professional
+# safety-critical systems require dual-channel validation (e.g., two independent
+# hardwired switches). This is a hobby-grade implementation and MUST NOT be
+# relied upon as a sole defense to prevent asphyxiation.
+# ===========================================================================
+esp32_ble_tracker:
+  on_ble_service_data_advertise:
+    - mac_address: ${window_sensor_mac}
+      service_uuid: "FCD2"
+      then:
+        - lambda: |-
+            const int size = x.size();
+            if (size < 2) return;
+            for (int i = 1; i < size; ) {
+              uint8_t obj_id = x[i];
+              if (obj_id == 0x2d) { // window (1 byte)
+                if (i + 1 < size) {
+                  bool window_state = x[i+1] > 0;
+                  id(window_sensor_raw).publish_state(window_state);
+                  id(window_open_effective).publish_state(window_state);
+                  if (window_state) {
+                    id(window_watchdog).execute();
+                  } else {
+                    id(window_watchdog).stop();
+                  }
+                }
+                i += 2;
+              } else if (obj_id == 0x00 || obj_id == 0x01 || obj_id == 0x21 || obj_id == 0x3a) { // 1-byte data
+                i += 2;
+              } else if (obj_id == 0x02 || obj_id == 0x03 || obj_id == 0x3f) { // 2-byte data
+                i += 3;
+              } else if (obj_id == 0x05) { // 3-byte data
+                i += 4;
+              } else {
+                // Stop parsing on unknown object ID to avoid alignment issues
+                break;
+              }
+            }
+
+script:
+  - id: update_led
+    mode: restart
+    then:
+      - if:
+          condition:
+            or:
+              - state_machine.state:
+                  id: interlock_sm
+                  value: LOCAL_EMERGENCY
+              - state_machine.state:
+                  id: interlock_sm
+                  value: PEER_EMERGENCY
+          then:
+            - while:
+                condition: [ lambda: "return true;" ]
+                then:
+                  - light.turn_on: status_led
+                  - delay: 200ms
+                  - light.turn_off: status_led
+          else:
+            - if:
+                condition:
+                  or:
+                    - state_machine.state:
+                        id: interlock_sm
+                        value: COMM_LOCKOUT_REJECT
+                    - state_machine.state:
+                        id: interlock_sm
+                        value: COMM_LOCKOUT_TIMEOUT
+                then:
+                  - while:
+                      condition: [ lambda: "return true;" ]
+                      then:
+                        - light.turn_on: status_led
+                        - delay: 500ms
+                        - light.turn_off: status_led
+                        - delay: 500ms
+                else:
+                  - if:
+                      condition:
+                        - state_machine.state:
+                            id: interlock_sm
+                            value: SAFE
+                      then:
+                        - light.turn_on: status_led
+                      else:
+                        - light.turn_off: status_led
+
+  # broadcast_state script moved to specific node files
+
+  - id: window_watchdog
+    mode: restart
+    then:
+      - delay: 30s
+      - binary_sensor.template.publish:
+          id: window_sensor_raw
+          state: OFF
+      - binary_sensor.template.publish:
+          id: window_open_effective
+          state: OFF
+
+binary_sensor:
+  - platform: template
+    id: relay_state_tracker
+    internal: true
+
+  - platform: template
+    name: "Kitchen Window Raw"
+    id: window_sensor_raw
+    internal: true
+    on_press:
+      then:
+        - barrier_group.propose:
+            id: furnace_stove_interlock
+            proposal: WINDOW_STATE
+            state:
+              window_open: true
+    on_release:
+      then:
+        - barrier_group.propose:
+            id: furnace_stove_interlock
+            proposal: WINDOW_STATE
+            state:
+              window_open: false
+
+  - platform: template
+    name: "Effective Window Open"
+    id: window_open_effective
+    on_release:
+      then:
+        - logger.log: "Window closed."
+    on_state:
+      then:
+        - if:
+            condition:
+              - binary_sensor.is_on: window_open_effective
+            then:
+              - if:
+                  condition:
+                    - state_machine.state:
+                        id: interlock_sm
+                        value: COMM_LOCKOUT_REJECT
+                  then:
+                    - state_machine.transition:
+                        id: interlock_sm
+                        input: CLEAR_LOCKOUT
+                    - logger.log: "Window opened. Recovering from peer rejection lockout."
+
+  - platform: template
+    name: "Peer Emergency"
+    id: peer_emergency
+    on_press:
+      then:
+        - state_machine.transition:
+            id: interlock_sm
+            input: PEER_EMERGENCY_DETECTED
+        - logger.log:
+            format: "CRITICAL: Peer emergency detected (welded contact)! Locking out."
+            level: ERROR
+    on_release:
+      then:
+        - logger.log:
+            format: "Peer emergency cleared by peer node (remote human reset). Resetting local lockout."
+            level: WARN
+        - state_machine.transition:
+            id: interlock_sm
+            input: RESET_EMERGENCY
+
+  - platform: template
+    name: "Local Active"
+    id: local_active
+    on_state:
+      then:
+        - script.execute: broadcast_state
+
+  - platform: template
+    name: "Local Emergency"
+    id: local_emergency
+    lambda: |-
+      return id(local_emergency_latched);
+    on_state:
+      then:
+        - script.execute: broadcast_state
+
+  - platform: template
+    name: "Welded Relay Raw"
+    id: welded_relay_raw
+    internal: true
+    filters:
+      - delayed_on: 10s
+    on_press:
+      then:
+        - lambda: |-
+            id(local_emergency_latched) = true;
+        - binary_sensor.template.publish:
+            id: local_emergency
+            state: true
+        - text_sensor.template.publish:
+            id: hardware_health
+            state: "BRICKED (WELDED RELAY)"
+        - logger.log:
+            format: "CRITICAL: Welded relay contact detected locally! Locking out."
+            level: ERROR
+        - state_machine.transition:
+            id: interlock_sm
+            input: LOCAL_EMERGENCY_DETECTED
+
+
+
+sensor:
+  - platform: hlw8012
+    sel_pin:
+      number: GPIO12
+      inverted: true
+    cf_pin: GPIO04
+    cf1_pin: GPIO05
+    voltage_divider: 780
+    current_resistor: 0.001
+    power:
+      name: "Power"
+      id: power
+      filters:
+        - throttle: 15s
+      on_value:
+        then:
+          - lambda: |-
+              id(local_active).publish_state(x > id(safety_threshold).state);
+    voltage:
+      name: "Voltage"
+      id: voltage
+      filters:
+        - throttle: 15s
+    current:
+      name: "Current"
+      id: current
+      filters:
+        - throttle: 15s
+    energy:
+      name: "Energy"
+      filters:
+        - throttle: 15s
+    change_mode_every: 8
+    update_interval: 5s
+
+  - platform: template
+    name: "Apparent Power"
+    id: apparent_power
+    lambda: |-
+      return ( id(voltage).get_raw_state() * id(current).get_raw_state() );
+    unit_of_measurement: "VA"
+    accuracy_decimals: 2
+    device_class: apparent_power
+    icon: "mdi:flash"
+    update_interval: 15s
+    entity_category: diagnostic
+
+  - platform: template
+    name: "Reactive Power"
+    id: reactive_power
+    lambda: |-
+      return ( sqrt(id(apparent_power).state * id(apparent_power).state - id(power).state * id(power).state) );
+    unit_of_measurement: "VAr"
+    accuracy_decimals: 2
+    device_class: reactive_power
+    icon: "mdi:flash"
+    update_interval: 15s
+    entity_category: diagnostic
+
+  - platform: template
+    name: "Safety Power Threshold"
+    id: safety_threshold
+    unit_of_measurement: "W"
+    accuracy_decimals: 1
+    device_class: power
+    entity_category: diagnostic
+    lambda: |-
+      return ${safety_power_threshold};
+
+barrier_group:
+  - id: furnace_stove_interlock
+    nodes:
+      - furnace
+      - stove
+    port: 6543
+    multicast_group: 239.1.2.3
+    proposal_timeout_ms: 2000
+    key: "furnace-stove-secret-key" # CHANGE THIS IN PRODUCTION
+    proposals:
+      - name: WINDOW_STATE
+        required_nodes: [furnace, stove]
+        state_vars:
+          window_open: bool
+        on_execute:
+          - lambda: |-
+              id(window_open_effective).publish_state(state.window_open);
+              if (state.window_open) {
+                id(window_watchdog).execute();
+              } else {
+                id(window_watchdog).stop();
+              }
+
+
+      - name: FURNACE_STATE
+        required_nodes: [furnace, stove]
+        state_vars:
+          emergency: bool
+          mac: uint64_t
+        on_execute:
+          - script.execute:
+              id: handle_furnace_state
+              emergency_val: !lambda "return state.emergency;"
+              peer_mac_val: !lambda "return state.mac;"
+        on_timeout:
+          - if:
+              condition:
+                and:
+                  - binary_sensor.is_off: window_open_effective
+                  - binary_sensor.is_on: local_active
+              then:
+                - state_machine.transition:
+                    id: interlock_sm
+                    input: LOCKOUT_PEER_TIMEOUT
+                - logger.log: "FURNACE_STATE proposal timed out while active with window closed. Locking out."
+              else:
+                - logger.log: "FURNACE_STATE proposal timed out, but safe (window open or inactive)."
+
+      - name: STOVE_STATE
+        required_nodes: [furnace, stove]
+        state_vars:
+          emergency: bool
+          mac: uint64_t
+        on_execute:
+          - script.execute:
+              id: handle_stove_state
+              emergency_val: !lambda "return state.emergency;"
+              peer_mac_val: !lambda "return state.mac;"
+        on_timeout:
+          - if:
+              condition:
+                and:
+                  - binary_sensor.is_off: window_open_effective
+                  - binary_sensor.is_on: local_active
+              then:
+                - state_machine.transition:
+                    id: interlock_sm
+                    input: LOCKOUT_PEER_TIMEOUT
+                - logger.log: "STOVE_STATE proposal timed out while active with window closed. Locking out."
+              else:
+                - logger.log: "STOVE_STATE proposal timed out, but safe (window open or inactive)."
+
+interval:
+  - interval: 10s
+    then:
+      - script.execute: broadcast_state
+
+  - interval: 2s
+    then:
+      - if:
+          condition:
+            - binary_sensor.is_on: local_emergency
+          then:
+            - script.execute: broadcast_state
+
+  - interval: 1s
+    then:
+      - lambda: |-
+          id(relay_state_tracker).publish_state(id(relay).state);
+          // NOTE: publish_state() passes through the binary sensor's filter pipeline,
+          // so the delayed_on: 10s debounce on welded_relay_raw is still active.
+          if (id(power).has_state()) {
+            id(welded_relay_raw).publish_state(!id(relay).state && (id(power).get_raw_state() > ${zero_power_deadband}));
+          }

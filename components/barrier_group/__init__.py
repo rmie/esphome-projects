@@ -56,6 +56,10 @@ ALLOWED_TYPES = {
     "uint16_t": "uint16_t",
     "int32_t": "int32_t",
     "uint32_t": "uint32_t",
+    "int64": "int64_t",
+    "uint64": "uint64_t",
+    "int64_t": "int64_t",
+    "uint64_t": "uint64_t",
 }
 
 PROPOSAL_SCHEMA = cv.Schema(
