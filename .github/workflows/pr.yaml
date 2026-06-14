@@ -1,6 +1,7 @@
 name: Test ESPHome Compile
 
 on:
+  push:
   pull_request:
     branches:
       - main
@@ -10,12 +11,15 @@ on:
       - 'testing/**.yaml'
       - 'dehumidifier/**.yaml'
       - 'hotwater-heatpump/**.yaml'
+      - 'components/barrier_group/**'
+      - 'example/barrier_group/**.yaml'
 
 jobs:
   esphome-compile:
     runs-on: ubuntu-latest
     
     strategy:
+      fail-fast: false
       matrix:
         device: 
           - config: testing/esp32.yaml
@@ -29,7 +33,28 @@ jobs:
             main_name: "dehumidifier"            
           - config: hotwater-heatpump/hotwater-heatpump.yaml
             friendly_name: "BrauchwasserWP"
-            main_name: "brauchwasserwp"              
+            main_name: "brauchwasserwp"
+          - config: example/barrier_group/furnace.yaml
+            friendly_name: "Kitchen Furnace"
+            main_name: "furnace"
+          - config: example/barrier_group/stove.yaml
+            friendly_name: "Pellet Stove"
+            main_name: "stove"
+          - config: components/barrier_group/tests/test.esp32-ard.yaml
+            friendly_name: "Barrier Group ESP32 Arduino"
+            main_name: "bg-esp32-ard"
+          - config: components/barrier_group/tests/test.esp32-idf.yaml
+            friendly_name: "Barrier Group ESP32 IDF"
+            main_name: "bg-esp32-idf"
+          - config: components/barrier_group/tests/test.esp32-c3-ard.yaml
+            friendly_name: "Barrier Group ESP32-C3 Arduino"
+            main_name: "bg-esp32-c3-ard"
+          - config: components/barrier_group/tests/test.esp32-c3-idf.yaml
+            friendly_name: "Barrier Group ESP32-C3 IDF"
+            main_name: "bg-esp32-c3-idf"
+          - config: components/barrier_group/tests/test.esp8266-ard.yaml
+            friendly_name: "Barrier Group ESP8266 Arduino"
+            main_name: "bg-esp8266-ard"
 
     steps:
       - name: Checkout Code
@@ -42,6 +67,7 @@ jobs:
         run: |
           cat <<EOF | tee hotwater-heatpump/secrets.yaml \
                     | tee dehumidifier/secrets.yaml \
+                    | tee common/secrets.yaml \
                     > testing/secrets.yaml
           wifi_ssid: "Fake-WiFi-Network"
           wifi_password: "FakeWiFiPassword123"
@@ -53,7 +79,7 @@ jobs:
           path: .esphome
           key: ${{ runner.os }}-esphome-${{ matrix.device.config }}-${{ hashFiles(matrix.device.config) }}
           restore-keys: |
-            ${{ runner.os }}-esphome-${{ matrix.cdevice.config }}-
+            ${{ runner.os }}-esphome-${{ matrix.device.config }}-
 
       - name: Compile ESPHome Binary
         uses: esphome/build-action@main

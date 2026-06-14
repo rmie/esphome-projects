@@ -5,7 +5,7 @@ packages:
 external_components:
   - source:
       type: git
-      url: https://github.com/muxa/esphome-state-machine
+      url: https://github.com/rmie/esphome-state-machine
 
 esphome:
   name: "${main_name}"

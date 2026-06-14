@@ -1,0 +1,60 @@
+substitutions:
+  main_name: stove
+  friendly_name: "Pellet Stove"
+  safety_power_threshold: "15.0"
+  zero_power_deadband: "5.0"
+
+packages:
+  common: !include furnace-stove-common.yaml
+
+switch:
+  - platform: gpio
+    pin: GPIO16
+    id: relay
+    internal: true
+    restore_mode: ALWAYS_OFF
+
+barrier_group:
+  - id: furnace_stove_interlock
+    proposals:
+      - name: AUTHORIZE_FURNACE
+        required_nodes: [furnace, stove]
+        accept_if: |-
+          return !id(local_emergency_latched) && (id(window_open_effective).state || !id(local_active).state);
+
+script:
+  - id: broadcast_state
+    then:
+      - lambda: |-
+          uint64_t my_mac = 0;
+          for (uint8_t b : get_mac_address()) my_mac = (my_mac << 8) | b;
+          furnace_stove_interlock_STOVE_STATE_State state_data{id(local_emergency).state, my_mac};
+          id(furnace_stove_interlock).propose("STOVE_STATE", &state_data, sizeof(state_data));
+  - id: handle_stove_state
+    parameters:
+      emergency_val: bool
+      peer_mac_val: uint64_t
+    then:
+      - logger.log: "Ignoring own state proposal"
+  - id: handle_furnace_state
+    parameters:
+      emergency_val: bool
+      peer_mac_val: uint64_t
+    then:
+      - lambda: |-
+          if (emergency_val) {
+            id(faulty_peer_mac) = peer_mac_val;
+            id(peer_emergency).publish_state(true);
+          } else {
+            if (id(peer_emergency).state) {
+              if (peer_mac_val != id(faulty_peer_mac)) {
+                ESP_LOGI("main", "New hardware detected (%llu). Clearing peer emergency.", peer_mac_val);
+                id(faulty_peer_mac) = 0;
+                id(peer_emergency).publish_state(false);
+              } else {
+                ESP_LOGW("main", "Ignoring safe broadcast from known faulty peer hardware.");
+              }
+            } else {
+              id(peer_emergency).publish_state(false);
+            }
+          }

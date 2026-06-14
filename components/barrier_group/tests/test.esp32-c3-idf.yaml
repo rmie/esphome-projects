@@ -1,0 +1,10 @@
+substitutions:
+  main_name: "test-esp32-c3-idf"
+  friendly_name: "Test ESP32-C3 IDF"
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+
+<<: !include common.yaml
