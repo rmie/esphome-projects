@@ -34,9 +34,6 @@ jobs:
           - config: hotwater-heatpump/hotwater-heatpump.yaml
             friendly_name: "BrauchwasserWP"
             main_name: "brauchwasserwp"
-          - config: testing/barrier-group.yaml
-            friendly_name: "Barrier Group"
-            main_name: "barrier-group"
           - config: example/barrier_group/furnace.yaml
             friendly_name: "Kitchen Furnace"
             main_name: "furnace"
