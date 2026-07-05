@@ -311,7 +311,7 @@ sensor:
     id: svp
     entity_category: diagnostic
     lambda: |-
-      return 6.112 * std::exp((17.67 * id(temerature).raw_state) / (id(temerature).raw_state + 243.5));
+      return 6.112 * std::exp((17.67 * id(temerature).get_raw_state()) / (id(temerature).get_raw_state() + 243.5));
     unit_of_measurement: "hPa"
     device_class: pressure
     icon: "mdi:gauge"
@@ -327,7 +327,7 @@ sensor:
     id: vp
     entity_category: diagnostic
     lambda: |-
-      return id(humidity).raw_state/100.0 * id(svp).raw_state;
+      return id(humidity).get_raw_state()/100.0 * id(svp).get_raw_state();
     unit_of_measurement: "hPa"
     device_class: pressure
     icon: "mdi:gauge"
@@ -345,9 +345,9 @@ sensor:
       ESP_LOGD(
         "Absolute humidity",
         "T:%f relH:%f vp:%f",
-        id(temerature).raw_state, id(humidity).raw_state, id(vp).raw_state
+        id(temerature).get_raw_state(), id(humidity).get_raw_state(), id(vp).get_raw_state()
       );
-      return 1000.0 * 100.0 * id(vp).raw_state / (461.5 * (id(temerature).raw_state + 273.15));
+      return 1000.0 * 100.0 * id(vp).get_raw_state() / (461.5 * (id(temerature).get_raw_state() + 273.15));
     unit_of_measurement: "g/m³"
     icon: "mdi:water"
     accuracy_decimals: 1
@@ -361,11 +361,11 @@ sensor:
     name: "Dew point"
     id: dewPoint
     lambda: |-
-      float t = std::log(id(vp).raw_state / 6.112);
+      float t = std::log(id(vp).get_raw_state() / 6.112);
       ESP_LOGD(
         "Dew point",
         "T:%f relH:%f vp:%f t:%f",
-        id(temerature).raw_state, id(humidity).raw_state, id(aH).raw_state, id(vp).raw_state, t
+        id(temerature).get_raw_state(), id(humidity).get_raw_state(), id(aH).get_raw_state(), id(vp).get_raw_state(), t
       );
       return (243.12 * t) / (17.67 - t);
     unit_of_measurement: "°C"
@@ -401,7 +401,7 @@ sensor:
     name: "Apparent Power"
     id: apparent_power
     lambda: |-
-      return ( id(voltage).raw_state * id(current).raw_state );
+      return ( id(voltage).get_raw_state() * id(current).get_raw_state() );
     unit_of_measurement: "VA"
     accuracy_decimals: 2
     device_class: apparent_power
