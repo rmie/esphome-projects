@@ -267,6 +267,7 @@ sensor:
       entity_category: diagnostic
       accuracy_decimals: 3
       filters:
+        - offset: 0.05
         - exponential_moving_average: 
             alpha: 0.01
             send_every: 15     
