@@ -286,8 +286,8 @@ sensor:
       accuracy_decimals: 1
       filters:
         - exponential_moving_average: 
-            alpha: 0.01
-            send_every: 60 
+            alpha: 0.06
+            send_every: 5 
     humidity:
       id: humidity
       name: "Humidity"
@@ -301,25 +301,25 @@ sensor:
             }                
       filters:
         - exponential_moving_average: 
-            alpha: 0.01
-            send_every: 60 
-    update_interval: 1s
+            alpha: 0.06
+            send_every: 5 
+    update_interval: 6s
 
   - platform: template
     name: "Saturation Vapor Pressure"
     id: svp
     entity_category: diagnostic
     lambda: |-
-      return 6.112 * std::exp((17.67 * id(temerature).state) / (id(temerature).state + 243.5));
+      return 6.112 * std::exp((17.67 * id(temerature).raw_state) / (id(temerature).raw_state + 243.5));
     unit_of_measurement: "hPa"
     device_class: pressure
     icon: "mdi:gauge"
     accuracy_decimals: 1
-    update_interval: 1s
+    update_interval: 6s
     filters:
       - exponential_moving_average: 
-          alpha: 0.01
-          send_every: 60
+          alpha: 0.06
+          send_every: 5
 
   - platform: template
     name: "Vapor Pressure"
@@ -331,11 +331,11 @@ sensor:
     device_class: pressure
     icon: "mdi:gauge"
     accuracy_decimals: 1
-    update_interval: 1s
+    update_interval: 6s
     filters:
       - exponential_moving_average: 
-          alpha: 0.01
-          send_every: 60
+          alpha: 0.06
+          send_every: 5
 
   - platform: template
     name: "Absolute humidity"
@@ -350,11 +350,11 @@ sensor:
     unit_of_measurement: "g/m³"
     icon: "mdi:water"
     accuracy_decimals: 1
-    update_interval: 1s  
+    update_interval: 6s  
     filters:
       - exponential_moving_average: 
-          alpha: 0.01
-          send_every: 60
+          alpha: 0.06
+          send_every: 5
 
   - platform: template
     name: "Dew point"
@@ -371,11 +371,11 @@ sensor:
     device_class: temperature
     icon: "mdi:thermometer-water"
     accuracy_decimals: 1
-    update_interval: 1s 
+    update_interval: 6s 
     filters:
       - exponential_moving_average: 
-          alpha: 0.01
-          send_every: 60
+          alpha: 0.06
+          send_every: 5
 
   - platform: template
     name: "Operation hours"
