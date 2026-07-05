@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600" style="background-color: white; font-family: monospace;">
+    <defs>
+        <!-- Resistor -->
+        <g id="resistor">
+            <polyline points="0,0 5,-5 15,5 25,-5 35,5 40,0" fill="none" stroke="black" stroke-width="2"/>
+        </g>
+        <!-- Resistor Vertical -->
+        <g id="resistor_v">
+            <polyline points="0,0 -5,5 5,15 -5,25 5,35 0,40" fill="none" stroke="black" stroke-width="2"/>
+        </g>
+        <!-- NPN Transistor -->
+        <g id="npn">
+            <circle cx="20" cy="20" r="20" fill="none" stroke="black" stroke-width="2"/>
+            <line x1="10" y1="5" x2="10" y2="35" stroke="black" stroke-width="3"/> <!-- Base plate -->
+            <line x1="0" y1="20" x2="10" y2="20" stroke="black" stroke-width="2"/> <!-- Base lead -->
+            <line x1="10" y1="12" x2="25" y2="0" stroke="black" stroke-width="2"/> <!-- Collector lead -->
+            <line x1="10" y1="28" x2="25" y2="40" stroke="black" stroke-width="2"/> <!-- Emitter lead -->
+            <polygon points="25,40 18,36 23,31" fill="black"/> <!-- Emitter arrow -->
+            <!-- Connection lines to boundaries -->
+            <line x1="25" y1="0" x2="25" y2="-10" stroke="black" stroke-width="2"/>
+            <line x1="25" y1="40" x2="25" y2="50" stroke="black" stroke-width="2"/>
+            <line x1="0" y1="20" x2="-10" y2="20" stroke="black" stroke-width="2"/>
+        </g>
+        <!-- Phototransistor (IR) -->
+        <g id="phototransistor">
+            <use href="#npn"/>
+            <!-- Light arrows pointing to base -->
+            <line x1="-15" y1="5" x2="-5" y2="15" stroke="black" stroke-width="2"/>
+            <polygon points="-5,15 -10,14 -6,10" fill="black"/>
+            <line x1="-10" y1="0" x2="0" y2="10" stroke="black" stroke-width="2"/>
+            <polygon points="0,10 -5,9 -1,5" fill="black"/>
+        </g>
+        <!-- GND -->
+        <g id="gnd">
+            <line x1="-15" y1="0" x2="15" y2="0" stroke="black" stroke-width="2"/>
+            <line x1="-10" y1="5" x2="10" y2="5" stroke="black" stroke-width="2"/>
+            <line x1="-5" y1="10" x2="5" y2="10" stroke="black" stroke-width="2"/>
+        </g>
+        <g id="dot">
+            <circle cx="0" cy="0" r="3" fill="black"/>
+        </g>
+    </defs>
+
+    <text x="20" y="30" font-size="20" font-weight="bold">Power Meter - Hardware Schematics</text>
+
+    <!-- 1. Optical Pulse Counter -->
+    <text x="20" y="70" font-size="16" font-weight="bold" fill="blue">1. Optical Pulse Counter (GPIO10)</text>
+    
+    <!-- VCC 1 -->
+    <text x="100" y="100" text-anchor="middle">3.3V</text>
+    <line x1="100" y1="105" x2="100" y2="120" stroke="black" stroke-width="2"/>
+    
+    <!-- R1 -->
+    <use href="#resistor_v" x="100" y="120"/>
+    <text x="120" y="140">R1 10kΩ</text>
+    
+    <line x1="100" y1="160" x2="100" y2="190" stroke="black" stroke-width="2"/>
+    <use href="#dot" x="100" y="190"/>
+    
+    <!-- To GPIO10 -->
+    <line x1="100" y1="190" x2="250" y2="190" stroke="black" stroke-width="2"/>
+    <text x="260" y="195">GPIO10 (ESP32-C3)</text>
+    
+    <!-- PT1 -->
+    <line x1="100" y1="190" x2="100" y2="230" stroke="black" stroke-width="2"/>
+    <use href="#phototransistor" x="75" y="240"/>
+    <text x="110" y="265">PT1 (Visible)</text>
+    
+    <!-- GND 1 -->
+    <line x1="100" y1="290" x2="100" y2="320" stroke="black" stroke-width="2"/>
+    <use href="#gnd" x="100" y="320"/>
+
+    <!-- 2. SML IR Receiver -->
+    <text x="400" y="70" font-size="16" font-weight="bold" fill="blue">2. SML IR Receiver (GPIO20)</text>
+
+    <!-- VCC PT2 -->
+    <text x="450" y="100" text-anchor="middle">3.3V</text>
+    <line x1="450" y1="105" x2="450" y2="150" stroke="black" stroke-width="2"/>
+    
+    <!-- PT2 -->
+    <use href="#phototransistor" x="425" y="160"/>
+    <text x="460" y="180">PT2 (IR)</text>
+
+    <!-- Node A -->
+    <line x1="450" y1="210" x2="450" y2="240" stroke="black" stroke-width="2"/>
+    <use href="#dot" x="450" y="240"/>
+
+    <!-- R1 (Pull down) -->
+    <line x1="450" y1="240" x2="450" y2="260" stroke="black" stroke-width="2"/>
+    <use href="#resistor_v" x="450" y="260"/>
+    <text x="470" y="280">R1 47kΩ</text>
+    
+    <line x1="450" y1="300" x2="450" y2="320" stroke="black" stroke-width="2"/>
+    <use href="#gnd" x="450" y="320"/>
+
+    <!-- R2 (Base resistor) -->
+    <line x1="450" y1="240" x2="490" y2="240" stroke="black" stroke-width="2"/>
+    <use href="#resistor" x="490" y="240"/>
+    <text x="500" y="230">R2 1kΩ</text>
+
+    <!-- Base of Q1 -->
+    <line x1="530" y1="240" x2="560" y2="240" stroke="black" stroke-width="2"/>
+    <use href="#npn" x="570" y="220"/>
+    <text x="615" y="245">Q1 NPN</text>
+
+    <!-- Emitter of Q1 to GND -->
+    <line x1="595" y1="270" x2="595" y2="320" stroke="black" stroke-width="2"/>
+    <use href="#gnd" x="595" y="320"/>
+
+    <!-- Collector of Q1 to Pull-up & GPIO20 -->
+    <line x1="595" y1="210" x2="595" y2="190" stroke="black" stroke-width="2"/>
+    <use href="#dot" x="595" y="190"/>
+    
+    <line x1="595" y1="190" x2="650" y2="190" stroke="black" stroke-width="2"/>
+    <text x="660" y="195">GPIO20 (UART RX)</text>
+
+    <!-- R3 (Pull up) -->
+    <line x1="595" y1="190" x2="595" y2="160" stroke="black" stroke-width="2"/>
+    <use href="#resistor_v" x="595" y="120"/>
+    <text x="615" y="140">R3 4.7kΩ</text>
+    
+    <!-- VCC R3 -->
+    <line x1="595" y1="120" x2="595" y2="105" stroke="black" stroke-width="2"/>
+    <text x="595" y="100" text-anchor="middle">3.3V</text>
+
+    <!-- Notes box -->
+    <rect x="20" y="400" width="760" height="150" rx="10" ry="10" fill="#f8f9fa" stroke="#dee2e6" stroke-width="2"/>
+    <text x="40" y="430" font-size="16" font-weight="bold" fill="#212529">SML Logic Path Explanation:</text>
+    <text x="40" y="460" font-size="14" fill="#495057">1. Idle (LED OFF): PT2 is OFF. R1 pulls Q1 Base to GND. Q1 is OFF. R3 pulls GPIO20 HIGH (UART Idle=1).</text>
+    <text x="40" y="485" font-size="14" fill="#495057">2. Start (LED ON): PT2 is ON. Current flows via PT2 and R2 into Q1 Base. Q1 is ON. GPIO20 pulled LOW (UART Start=0).</text>
+    <text x="40" y="515" font-size="14" fill="#212529" font-weight="bold">R2 (1kΩ)</text><text x="120" y="515" font-size="14" fill="#495057">limits current into the base of Q1 to prevent damage.</text>
+    <text x="40" y="535" font-size="14" fill="#212529" font-weight="bold">R1 (47kΩ)</text><text x="130" y="535" font-size="14" fill="#495057">provides a path to ground to quickly discharge Q1's base when PT2 turns off.</text>
+</svg>

@@ -1,0 +1,260 @@
+substitutions:
+  main_name: "power-meter"
+  friendly_name: "Power Meter"
+  # Pulse counter: imp/kWh as printed on your meter (common values: 1000, 2000, 10000)
+  pulse_rate: "5000"
+
+packages:
+  platform: !include ../common/esp32-c3.yaml
+  bt_proxy: !include ../common/bt_proxy.yaml
+
+# --- UART for SML IR read head ---
+# GPIO20 (RX) <- data from IR head
+# GPIO21 (TX) -> not used by SML (read-only), but required by UART config
+uart:
+  id: uart_sml
+  rx_pin: GPIO20
+  tx_pin: GPIO21
+  baud_rate: 9600
+  data_bits: 8
+  parity: NONE
+  stop_bits: 1
+
+# --- SML smart meter ---
+sml:
+  id: sml_meter
+  uart_id: uart_sml
+
+globals:
+  - id: sml_anchor
+    type: float
+    initial_value: 'NAN'
+  - id: pulse_anchor
+    type: float
+    initial_value: 'NAN'
+  - id: total_drift
+    type: int64_t
+    initial_value: '0'
+
+sensor:
+  # --- SML sensors ---
+  - platform: sml
+    sml_id: sml_meter
+    name: "Energy Import Day"
+    id: sml_energy_import_day
+    obis_code: "1-0:1.8.0"
+    unit_of_measurement: "kWh"
+    accuracy_decimals: 1
+    device_class: energy
+    state_class: total_increasing
+    filters:
+      - multiply: 0.0001
+
+  - platform: sml
+    sml_id: sml_meter
+    name: "Energy Import Night"
+    id: sml_energy_import_night
+    obis_code: "1-0:1.8.1"
+    unit_of_measurement: "kWh"
+    accuracy_decimals: 1
+    device_class: energy
+    state_class: total_increasing
+    filters:
+      - multiply: 0.0001
+
+  - platform: sml
+    sml_id: sml_meter
+    name: "Total Energy Export"
+    id: sml_energy_export
+    obis_code: "1-0:2.8.0"
+    unit_of_measurement: "kWh"
+    accuracy_decimals: 1
+    device_class: energy
+    state_class: total_increasing
+    filters:
+      - multiply: 0.0001
+
+  - platform: sml
+    sml_id: sml_meter
+    name: "Current Power"
+    id: sml_power
+    obis_code: "1-0:16.7.0"
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    filters:
+      - multiply: 0.01
+      - throttle: 10s
+
+  - platform: sml
+    sml_id: sml_meter
+    name: "Voltage L1"
+    id: sml_voltage_l1
+    obis_code: "1-0:32.7.0"
+    unit_of_measurement: "V"
+    accuracy_decimals: 1
+    device_class: voltage
+    state_class: measurement
+    filters:
+      - multiply: 0.1
+      - throttle: 10s
+
+  - platform: sml
+    sml_id: sml_meter
+    name: "Voltage L2"
+    id: sml_voltage_l2
+    obis_code: "1-0:52.7.0"
+    unit_of_measurement: "V"
+    accuracy_decimals: 1
+    device_class: voltage
+    state_class: measurement
+    filters:
+      - multiply: 0.1
+      - throttle: 10s
+
+  - platform: sml
+    sml_id: sml_meter
+    name: "Voltage L3"
+    id: sml_voltage_l3
+    obis_code: "1-0:72.7.0"
+    unit_of_measurement: "V"
+    accuracy_decimals: 1
+    device_class: voltage
+    state_class: measurement
+    filters:
+      - multiply: 0.1
+      - throttle: 10s
+
+  - platform: sml
+    sml_id: sml_meter
+    name: "Current L1"
+    id: sml_current_l1
+    obis_code: "1-0:31.7.0"
+    unit_of_measurement: "A"
+    accuracy_decimals: 2
+    device_class: current
+    state_class: measurement
+    filters:
+      - multiply: 0.01
+      - throttle: 10s
+
+  - platform: sml
+    sml_id: sml_meter
+    name: "Current L2"
+    id: sml_current_l2
+    obis_code: "1-0:51.7.0"
+    unit_of_measurement: "A"
+    accuracy_decimals: 2
+    device_class: current
+    state_class: measurement
+    filters:
+      - multiply: 0.01
+      - throttle: 10s
+
+  - platform: sml
+    sml_id: sml_meter
+    name: "Current L3"
+    id: sml_current_l3
+    obis_code: "1-0:71.7.0"
+    unit_of_measurement: "A"
+    accuracy_decimals: 2
+    device_class: current
+    state_class: measurement
+    filters:
+      - multiply: 0.01
+      - throttle: 10s
+
+  # --- Optical pulse counter (electricity meter LED) ---
+  # GPIO10: phototransistor input, internal pull-up, triggers on falling edge
+  - platform: pulse_counter
+    pin:
+      number: GPIO10
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    name: "Power Meter Instantaneous"
+    id: pulse_power
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    count_mode:
+      rising_edge: DISABLE
+      falling_edge: INCREMENT
+    internal_filter: 13us
+    update_interval: 60s
+    filters:
+      # pulses/min to W: pulses/min * 60 * 1000 / imp_per_kWh
+      - lambda: "return x * 60000.0 / ${pulse_rate};"
+    total:
+      name: "Power Meter Total"
+      id: pulse_energy
+      unit_of_measurement: "kWh"
+      accuracy_decimals: 4
+      device_class: energy
+      state_class: total_increasing
+      filters:
+        # total pulses to kWh: pulses / imp_per_kWh
+        - lambda: "return x / (float)${pulse_rate};"
+
+  # --- Synthetic energy (SML-anchored, pulse-interpolated) ---
+  - platform: template
+    name: "SML Total Import"
+    id: sml_total_import
+    internal: true
+    unit_of_measurement: "kWh"
+    accuracy_decimals: 4
+    device_class: energy
+    state_class: total_increasing
+    update_interval: 30s
+    lambda: |-
+      float d = id(sml_energy_import_day).state;
+      float n = id(sml_energy_import_night).state;
+      if (std::isnan(d) || std::isnan(n)) return NAN;
+      return d + n;
+    on_value:
+      - lambda: |-
+          float pulse_now = id(pulse_energy).state;
+          // accumulate drift if we have a previous anchor
+          if (!std::isnan(id(sml_anchor)) && !std::isnan(id(pulse_anchor)) && !std::isnan(pulse_now)) {
+            float drift_kwh = (pulse_now - id(pulse_anchor)) - (x - id(sml_anchor));
+            id(total_drift) += lroundf(drift_kwh * ${pulse_rate});
+          }
+          // set new anchor
+          id(sml_anchor) = x;
+          id(pulse_anchor) = std::isnan(pulse_now) ? 0.0f : pulse_now;
+
+  - platform: template
+    name: "Energy Import"
+    id: synthetic_energy
+    unit_of_measurement: "kWh"
+    accuracy_decimals: 4
+    device_class: energy
+    state_class: total_increasing
+    update_interval: 10s
+    lambda: |-
+      if (std::isnan(id(sml_anchor))) return NAN;
+      float pulse_now = id(pulse_energy).state;
+      if (std::isnan(pulse_now) || std::isnan(id(pulse_anchor))) return id(sml_anchor);
+      return id(sml_anchor) + (pulse_now - id(pulse_anchor));
+
+  - platform: template
+    name: "Pulse Drift"
+    id: energy_drift
+    unit_of_measurement: "kWh"
+    accuracy_decimals: 4
+    icon: "mdi:delta"
+    entity_category: diagnostic
+    update_interval: 60s
+    lambda: |-
+      return id(total_drift) / (float)${pulse_rate};
+
+text_sensor:
+  - platform: sml
+    sml_id: sml_meter
+    name: "Meter ID"
+    id: sml_meter_id
+    obis_code: "1-0:96.1.0"
+    entity_category: diagnostic
