@@ -348,7 +348,7 @@ sensor:
       float t = std::log(id(vp).get_raw_state() / 6.112);
       ESP_LOGD(
         "Dew point",
-        "T:%f relH:%f vp:%f t:%f",
+        "T:%f relH:%f aH:%f vp:%f t:%f",
         id(temerature).get_raw_state(), id(humidity).get_raw_state(), id(aH).get_raw_state(), id(vp).get_raw_state(), t
       );
       return (243.12 * t) / (17.67 - t);
