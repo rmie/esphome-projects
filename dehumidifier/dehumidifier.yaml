@@ -5,7 +5,8 @@ packages:
 external_components:
   - source:
       type: git
-      url: https://github.com/muxa/esphome-state-machine
+      url: https://github.com/rmie/esphome-state-machine
+      ref: features/dense-definition
 
 esphome:
   name: "${main_name}"
@@ -126,60 +127,37 @@ state_machine:
     inputs:
       - name: MODE_OFF
         transitions:
-          - ALWAYS_ON -> ALWAYS_OFF
-          - AUTO_ON -> ALWAYS_OFF
-          - AUTO_OFF -> ALWAYS_OFF
-          - AUTO_FULL -> ALWAYS_OFF_FULL
-          - ALWAYS_ON_FULL -> ALWAYS_OFF_FULL
+          - ALWAYS_ON,AUTO_ON,AUTO_OFF -> ALWAYS_OFF
+          - AUTO_FULL,ALWAYS_ON_FULL -> ALWAYS_OFF_FULL
       - name: MODE_ON
         transitions:
-          - ALWAYS_OFF -> ALWAYS_ON
-          - AUTO_ON -> ALWAYS_ON
-          - AUTO_OFF -> ALWAYS_ON
-          - AUTO_FULL -> ALWAYS_ON_FULL
-          - ALWAYS_OFF_FULL -> ALWAYS_ON_FULL
+          - ALWAYS_OFF,AUTO_ON,AUTO_OFF -> ALWAYS_ON
+          - AUTO_FULL,ALWAYS_OFF_FULL -> ALWAYS_ON_FULL
       - name: MODE_AUTO
         transitions:
           - ALWAYS_OFF -> AUTO_OFF
           - ALWAYS_ON -> AUTO_ON
-          - ALWAYS_OFF_FULL -> AUTO_FULL
-          - ALWAYS_ON_FULL -> AUTO_FULL
+          - ALWAYS_OFF_FULL,ALWAYS_ON_FULL -> AUTO_FULL
       - name: POWER_LOW
         transitions:
-          - AUTO_FULL -> AUTO_FULL
-          - AUTO_OFF -> AUTO_OFF
-          - ALWAYS_ON_FULL -> ALWAYS_ON_FULL
-          - ALWAYS_OFF_FULL -> ALWAYS_OFF_FULL
-          - ALWAYS_OFF -> ALWAYS_OFF
           - AUTO_ON -> AUTO_FULL
           - ALWAYS_ON -> ALWAYS_ON_FULL
+          - AUTO_FULL,AUTO_OFF,ALWAYS_ON_FULL,ALWAYS_OFF_FULL,ALWAYS_OFF ->
       - name: POWER_HIGH
         transitions:
-          - AUTO_ON -> AUTO_ON
-          - AUTO_OFF -> AUTO_OFF
-          - ALWAYS_ON -> ALWAYS_ON
-          - ALWAYS_OFF -> ALWAYS_OFF
           - AUTO_FULL -> AUTO_ON
           - ALWAYS_ON_FULL -> ALWAYS_ON
           - ALWAYS_OFF_FULL -> ALWAYS_OFF
+          - AUTO_ON,AUTO_OFF,ALWAYS_ON,ALWAYS_OFF ->
       - name: BELOW
         transitions:
           - AUTO_ON -> AUTO_OFF
-          - AUTO_OFF -> AUTO_OFF
-          - ALWAYS_OFF -> ALWAYS_OFF
-          - ALWAYS_ON -> ALWAYS_ON
-          - ALWAYS_ON_FULL -> ALWAYS_ON_FULL
-          - ALWAYS_OFF_FULL -> ALWAYS_OFF_FULL
-          - AUTO_FULL -> AUTO_FULL
+          - AUTO_OFF,ALWAYS_OFF,ALWAYS_ON,ALWAYS_ON_FULL,ALWAYS_OFF_FULL,AUTO_FULL ->
       - name: ABOVE
         transitions:
           - AUTO_OFF -> AUTO_ON
-          - AUTO_ON -> AUTO_ON
-          - ALWAYS_OFF -> ALWAYS_OFF
-          - ALWAYS_ON -> ALWAYS_ON
-          - ALWAYS_ON_FULL -> ALWAYS_ON_FULL
-          - ALWAYS_OFF_FULL -> ALWAYS_OFF_FULL
-          - AUTO_FULL -> AUTO_FULL
+          - AUTO_ON,ALWAYS_OFF,ALWAYS_ON,ALWAYS_ON_FULL,ALWAYS_OFF_FULL,AUTO_FULL ->
+
 
 select:
   - platform: template
@@ -235,7 +213,7 @@ sensor:
         then:
           - if:
               condition:
-                lambda: 'return id(power).state < 5;'
+                lambda: 'return x < 5;'
               then:
                 - lambda: 'id(states).transition("POWER_LOW");'
               else:
