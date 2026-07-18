@@ -48,6 +48,14 @@ globals:
     type: time_t
     initial_value: '0'  
 
+  - id: th3_last_update
+    type: uint32_t
+    initial_value: '0'
+
+  - id: th4_last_update
+    type: uint32_t
+    initial_value: '0'
+
 output:
   - platform: gpio
     id: relay
@@ -262,7 +270,7 @@ sensor:
     variant: AHT20
     temperature:
       name: "Temperature"
-      id: temerature
+      id: temperature
       accuracy_decimals: 1
       filters:
         - exponential_moving_average: 
@@ -295,7 +303,7 @@ sensor:
     id: svp
     entity_category: diagnostic
     lambda: |-
-      return 6.112 * std::exp((17.67 * id(temerature).get_raw_state()) / (id(temerature).get_raw_state() + 243.5));
+      return 6.112 * std::exp((17.67 * id(temperature).get_raw_state()) / (id(temperature).get_raw_state() + 243.5));
     unit_of_measurement: "hPa"
     device_class: pressure
     icon: "mdi:gauge"
@@ -329,9 +337,9 @@ sensor:
       ESP_LOGD(
         "Absolute humidity",
         "T:%f relH:%f vp:%f",
-        id(temerature).get_raw_state(), id(humidity).get_raw_state(), id(vp).get_raw_state()
+        id(temperature).get_raw_state(), id(humidity).get_raw_state(), id(vp).get_raw_state()
       );
-      return 1000.0 * 100.0 * id(vp).get_raw_state() / (461.5 * (id(temerature).get_raw_state() + 273.15));
+      return 1000.0 * 100.0 * id(vp).get_raw_state() / (461.5 * (id(temperature).get_raw_state() + 273.15));
     unit_of_measurement: "g/m³"
     icon: "mdi:water"
     accuracy_decimals: 1
@@ -349,7 +357,7 @@ sensor:
       ESP_LOGD(
         "Dew point",
         "T:%f relH:%f aH:%f vp:%f t:%f",
-        id(temerature).get_raw_state(), id(humidity).get_raw_state(), id(aH).get_raw_state(), id(vp).get_raw_state(), t
+        id(temperature).get_raw_state(), id(humidity).get_raw_state(), id(aH).get_raw_state(), id(vp).get_raw_state(), t
       );
       return (243.12 * t) / (17.67 - t);
     unit_of_measurement: "°C"
@@ -404,6 +412,120 @@ sensor:
     icon: "mdi:flash"
     update_interval: 15s
     entity_category: diagnostic
+
+  - platform: combination
+    type: mean
+    name: "Average Temperature"
+    id: avg_temperature
+    entity_category: diagnostic
+    device_class: temperature
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    sources:
+      - source: temperature
+      - source: atc_th3_temperature
+      - source: atc_th4_temperature
+
+  - platform: combination
+    type: mean
+    name: "Average Humidity"
+    id: avg_humidity
+    entity_category: diagnostic
+    device_class: humidity
+    unit_of_measurement: "%"
+    accuracy_decimals: 1
+    sources:
+      - source: humidity
+      - source: atc_th3_humidity
+      - source: atc_th4_humidity
+
+  - platform: dew_point
+    name: "Average Dew Point"
+    id: avg_dew_point
+    temperature: avg_temperature
+    humidity: avg_humidity
+    entity_category: diagnostic
+
+  - platform: absolute_humidity
+    name: "Average Absolute Humidity"
+    id: avg_absolute_humidity
+    temperature: avg_temperature
+    humidity: avg_humidity
+    entity_category: diagnostic
+
+  - platform: bthome_mithermometer
+    mac_address: "A4:C1:38:FC:55:E5"
+    id: atc_th3
+    temperature:
+      name: "ATC-TH3 Temperature"
+      id: atc_th3_temperature
+      internal: true
+      on_value:
+        - lambda: |-
+            if (id(th3_last_update) != 0) {
+              id(atc_th3_age).publish_state((millis() - id(th3_last_update)) / 1000.0);
+            }
+            id(th3_last_update) = millis();
+      filters:
+        - timeout: 300s
+    humidity:
+      name: "ATC-TH3 Humidity"
+      id: atc_th3_humidity
+      internal: true
+      filters:
+        - timeout: 300s
+    battery_voltage:
+      name: "ATC-TH3 Battery Voltage"
+      internal: true
+    signal_strength:
+      name: "ATC-TH3 Signal"
+      internal: true
+
+  - platform: bthome_mithermometer
+    mac_address: "A4:C1:38:63:F1:17"
+    id: atc_th4
+    temperature:
+      name: "ATC-TH4 Temperature"
+      id: atc_th4_temperature
+      internal: true
+      on_value:
+        - lambda: |-
+            if (id(th4_last_update) != 0) {
+              id(atc_th4_age).publish_state((millis() - id(th4_last_update)) / 1000.0);
+            }
+            id(th4_last_update) = millis();
+      filters:
+        - timeout: 300s
+    humidity:
+      name: "ATC-TH4 Humidity"
+      id: atc_th4_humidity
+      internal: true
+      filters:
+        - timeout: 300s
+    battery_voltage:
+      name: "ATC-TH4 Battery Voltage"
+      internal: true
+    signal_strength:
+      name: "ATC-TH4 Signal"
+      internal: true
+
+  - platform: template
+    name: "ATC-TH3 Age"
+    id: atc_th3_age
+    entity_category: diagnostic
+    device_class: duration
+    unit_of_measurement: "s"
+    accuracy_decimals: 0
+    icon: "mdi:clock-outline"
+
+  - platform: template
+    name: "ATC-TH4 Age"
+    id: atc_th4_age
+    entity_category: diagnostic
+    device_class: duration
+    unit_of_measurement: "s"
+    accuracy_decimals: 0
+    icon: "mdi:clock-outline"
 
 text_sensor:
   - platform: template
