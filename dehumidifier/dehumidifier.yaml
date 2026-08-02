@@ -6,7 +6,7 @@ external_components:
   - source:
       type: git
       url: https://github.com/rmie/esphome-state-machine
-      ref: 44c4c19
+      ref: fix-identity-transitions
     refresh: 0s
     
 esphome:
