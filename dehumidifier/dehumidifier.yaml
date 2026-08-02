@@ -7,7 +7,8 @@ external_components:
       type: git
       url: https://github.com/rmie/esphome-state-machine
       ref: features/dense-definition
-
+    refresh: 0s
+    
 esphome:
   name: "${main_name}"
   friendly_name: "${friendly_name}"
