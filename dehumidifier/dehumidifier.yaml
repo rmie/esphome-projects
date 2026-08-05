@@ -20,6 +20,9 @@ esphome:
             id: relay_status
             state: "off"
         - state_machine.set: ALWAYS_OFF
+        - sensor.template.publish:
+            id: energy_last_tank
+            state: !lambda "return id(energy_last_tank_global);"
   on_shutdown:
     - priority: 800
       then:
@@ -48,6 +51,29 @@ globals:
   - id: relay_last_on
     type: time_t
     initial_value: '0'  
+
+  - id: energy_last_tank_global
+    type: float
+    restore_value: yes
+    initial_value: '0.0'
+
+script:
+  - id: register_tank_full
+    mode: single
+    then:
+      - if:
+          condition:
+            sensor.in_range:
+              id: current_tank_energy
+              above: 0.05
+          then:
+            - globals.set:
+                id: energy_last_tank_global
+                value: !lambda "return id(current_tank_energy).state;"
+            - sensor.template.publish:
+                id: energy_last_tank
+                state: !lambda "return id(energy_last_tank_global);"
+      - sensor.integration.reset: current_tank_energy
 
 output:
   - platform: gpio
@@ -78,6 +104,7 @@ state_machine:
               state: "on"
       - name: ALWAYS_ON_FULL
         on_enter:
+          - script.execute: register_tank_full
           - output.turn_on: relay
           - lambda: |-
               id(relay_total_on) += (id(relay_last_on) == 0LL ? 0LL : ha_time->utcnow().timestamp - id(relay_last_on));
@@ -88,6 +115,7 @@ state_machine:
               state: "full"
       - name: ALWAYS_OFF_FULL
         on_enter:
+          - script.execute: register_tank_full
           - output.turn_on: relay
           - lambda: |-
               id(relay_total_on) += (id(relay_last_on) == 0LL ? 0LL : ha_time->utcnow().timestamp - id(relay_last_on));
@@ -114,6 +142,7 @@ state_machine:
               state: "running"
       - name: AUTO_FULL
         on_enter:
+          - script.execute: register_tank_full
           - output.turn_on: relay
           - lambda: |-
               id(relay_total_on) += (id(relay_last_on) == 0LL ? 0LL : ha_time->utcnow().timestamp - id(relay_last_on));
@@ -222,6 +251,7 @@ sensor:
                 - state_machine.transition: POWER_HIGH
     energy:
       name: "Energy"
+      id: pzem_energy
       filters:
         - throttle: 15s      
     current:
@@ -405,6 +435,29 @@ sensor:
     icon: "mdi:flash"
     update_interval: 15s
     entity_category: diagnostic
+
+  - platform: template
+    name: "Energy Last Tank"
+    id: energy_last_tank
+    unit_of_measurement: "kWh"
+    device_class: energy
+    icon: "mdi:water-boiler"
+    accuracy_decimals: 3
+    update_interval: never
+
+  - platform: integration
+    name: "Current Tank Energy"
+    id: current_tank_energy
+    sensor: power
+    time_unit: h
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: measurement
+    icon: "mdi:water-boiler"
+    accuracy_decimals: 3
+    restore: true
+    filters:
+      - multiply: 0.001
 
 text_sensor:
   - platform: template
