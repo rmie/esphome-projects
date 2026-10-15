@@ -10,6 +10,7 @@ on:
       - 'testing/**.yaml'
       - 'dehumidifier/**.yaml'
       - 'hotwater-heatpump/**.yaml'
+      - 'wildlife-cam/**.yaml'
 
 jobs:
   esphome-compile:
@@ -30,6 +31,9 @@ jobs:
           - config: hotwater-heatpump/hotwater-heatpump.yaml
             friendly_name: "BrauchwasserWP"
             main_name: "brauchwasserwp"              
+          - config: wildlife-cam/wildlife-cam.yaml
+            friendly_name: "Wildlife Cam"
+            main_name: "wildlife-cam"
 
     steps:
       - name: Checkout Code
@@ -42,6 +46,7 @@ jobs:
         run: |
           cat <<EOF | tee hotwater-heatpump/secrets.yaml \
                     | tee dehumidifier/secrets.yaml \
+                    | tee wildlife-cam/secrets.yaml \
                     > testing/secrets.yaml
           wifi_ssid: "Fake-WiFi-Network"
           wifi_password: "FakeWiFiPassword123"

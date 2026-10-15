@@ -1,6 +1,11 @@
 packages:
   platform: !include esp32.yaml
 
+esp32:
+  framework:
+    advanced:
+      minimum_chip_revision: "1.0"
+
 esphome:
   platformio_options:
     board_build.flash_mode: dio
@@ -32,6 +37,7 @@ output:
     channel: 2
     pin: GPIO4
     id: espCamLED
+    frequency: 1220 Hz
   - platform: gpio
     pin:
       number: GPIO33
@@ -42,7 +48,9 @@ light:
   - platform: monochromatic
     output: espCamLED
     id: esp_cam_light
-    name: esp-cam light
+    name: esp-cam flash light
+    default_transition_length: 0s
+    gamma_correct: 0
   - platform: binary
     output: gpio_33
-    name: esp-cam led  
+    name: esp-cam status led
