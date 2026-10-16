@@ -1,6 +1,6 @@
 # Wildlife Cam
 
-ESPHome configuration for an ESP32-CAM board intended for wildlife and outdoor monitoring. Provides live MJPEG video streaming, snapshot capture, and adjustable onboard flash LED brightness.
+ESPHome configuration for an ESP32-CAM board intended for wildlife and outdoor monitoring. Provides live MJPEG video streaming, snapshot capture, adjustable onboard flash LED brightness, and dynamic exposure controls.
 
 ## Hardware & Pinout
 
@@ -29,9 +29,20 @@ Direct HTTP video streaming and snapshot endpoints are provided by `esp32_camera
 |----------|------|------|-----|-------------|
 | MJPEG Stream | 8080 | `stream` | `http://<ip>:8080/` | Live video feed (1 client at a time) for browser, Frigate, go2rtc, or VLC |
 | Snapshot | 8081 | `snapshot` | `http://<ip>:8081/` | Single still JPEG image on request |
-| ESPHome Web UI | 80 | Web Server v3 | `http://<ip>/` | Device status, restart button, and interactive LED brightness slider |
+| ESPHome Web UI | 80 | Web Server v3 | `http://<ip>/` | Device status, restart button, and interactive controls |
 
 In addition, Home Assistant receives the camera feed directly via the native API component.
+
+### Exposure Controls & Sliders
+
+Live controls exposed directly in the Web UI and Home Assistant:
+
+| Entity | Type | Default | Description |
+|--------|------|---------|-------------|
+| **Auto Exposure (AEC)** | Switch | `ON` | Toggles sensor Automatic Exposure Control (`AUTO` / `MANUAL`) |
+| **DSP AEC2** | Switch | `OFF` | Enables sensor DSP auto-exposure algorithm (better high-contrast night handling) |
+| **Auto Exposure Level** | Slider (-2 to +2) | `0` | Exposure target compensation when Auto Exposure is active |
+| **Manual Exposure Time** | Slider (0 to 1200) | `300` | Direct shutter/exposure row value used when Auto Exposure is turned off |
 
 ### Dimmable LED (PWM)
 

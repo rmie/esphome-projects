@@ -20,6 +20,7 @@ i2c:
     scl: GPIO27
 
 esp32_camera:
+  id: cam
   external_clock:
     pin: GPIO0
     frequency: 20MHz
