@@ -29,11 +29,11 @@ switch:
     restore_mode: RESTORE_DEFAULT_ON
     turn_on_action:
       - lambda: |-
-          id(cam).set_aec_mode(esphome::esp32_camera::ESP32_GAINCONTROL_AUTO);
+          id(cam).set_aec_mode(esphome::esp32_camera::ESP32_GC_MODE_AUTO);
           id(cam).update_camera_parameters();
     turn_off_action:
       - lambda: |-
-          id(cam).set_aec_mode(esphome::esp32_camera::ESP32_GAINCONTROL_MANUAL);
+          id(cam).set_aec_mode(esphome::esp32_camera::ESP32_GC_MODE_MANU);
           id(cam).update_camera_parameters();
 
   - platform: template
