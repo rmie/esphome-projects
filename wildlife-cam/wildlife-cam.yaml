@@ -26,7 +26,6 @@ switch:
     id: camera_aec
     icon: "mdi:camera-metering-center"
     optimistic: true
-    initial_state: true
     restore_mode: RESTORE_DEFAULT_ON
     turn_on_action:
       - lambda: |-
@@ -42,7 +41,6 @@ switch:
     id: camera_aec2
     icon: "mdi:camera-iris"
     optimistic: true
-    initial_state: false
     restore_mode: RESTORE_DEFAULT_OFF
     turn_on_action:
       - lambda: |-
