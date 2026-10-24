@@ -3,8 +3,6 @@ packages:
   bt_proxy: !include ../common/bt_proxy.yaml
 
 esphome:
-  platformio_options:
-    board_build.flash_mode: dio
   on_boot:
     - priority: 800
       then:
@@ -22,7 +20,7 @@ light:
     id: status_light
     internal: true
     chipset: ws2812
-    rgb_order: GRB
+    channel_colors: GRB
     pin: GPIO18
     num_leds: 2
     name: "Status Light"
