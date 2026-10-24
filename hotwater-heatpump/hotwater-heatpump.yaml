@@ -127,7 +127,7 @@ sensor:
     name: "Apparent Power"
     id: apparent_power
     lambda: |-
-      return ( id(voltage).raw_state * id(current).raw_state );
+      return ( id(voltage).get_raw_state() * id(current).get_raw_state() );
     unit_of_measurement: "VA"
     accuracy_decimals: 2
     device_class: apparent_power
