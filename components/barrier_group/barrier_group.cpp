@@ -3,6 +3,7 @@
 #include "esphome/core/log.h"
 #include "esphome/core/helpers.h"
 #include <fcntl.h>
+#include <cinttypes>
 #include <errno.h>
 #ifdef USE_ESP32
 #include <mbedtls/md.h>
@@ -33,7 +34,7 @@ void BarrierGroupComponent::setup() {
         ESP_LOGW(TAG, "Cryptography is not supported on this platform. Pre-shared key signature verification is disabled.");
     }
 #endif
-    // ── Identify self ───────────────────────────────────────────────────────
+    // ── Identify self ──────────────────────────────────────────────────────
     // Nodes are sorted alphabetically at codegen; their index is their ID.
     // We find ourselves by matching App.get_name() to the nodes list.
     const std::string my_name = App.get_name();
@@ -51,7 +52,7 @@ void BarrierGroupComponent::setup() {
     }
 
 #ifdef USE_ESP8266
-    // ── Create UDP socket & Join multicast group ─────────────────────────────
+    // ── Create UDP socket & Join multicast group ───────────────────────────
     IPAddress multicast_ip(
         (multicast_addr_ >> 24) & 0xFF,
         (multicast_addr_ >> 16) & 0xFF,
@@ -65,7 +66,7 @@ void BarrierGroupComponent::setup() {
         return;
     }
 #else
-    // ── Create UDP socket ────────────────────────────────────────────────────
+    // ── Create UDP socket ──────────────────────────────────────────────────
     sock_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock_ < 0) {
         ESP_LOGE(TAG, "socket() failed: %d", errno);
@@ -92,7 +93,7 @@ void BarrierGroupComponent::setup() {
         return;
     }
 
-    // ── Join multicast group ─────────────────────────────────────────────────
+    // ── Join multicast group ───────────────────────────────────────────────
     struct ip_mreq mreq{};
     mreq.imr_multiaddr.s_addr = htonl(multicast_addr_);
     mreq.imr_interface.s_addr = INADDR_ANY;
@@ -107,7 +108,7 @@ void BarrierGroupComponent::setup() {
     setsockopt(sock_, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl));
 #endif
 
-    ESP_LOGI(TAG, "[%08X] ready  name='%s'  node_id=%d  port=%d  multicast=%d.%d.%d.%d  "
+    ESP_LOGI(TAG, "[%08" PRIX32 "] ready  name='%s'  node_id=%d  port=%d  multicast=%" PRIu32 ".%" PRIu32 ".%" PRIu32 ".%" PRIu32 "  "
                   "nodes=%zu  proposals=%zu",
              group_id_, my_name.c_str(), my_node_id_, port_,
              (multicast_addr_ >> 24) & 0xFF, (multicast_addr_ >> 16) & 0xFF,
@@ -129,7 +130,7 @@ void BarrierGroupComponent::propose(const std::string &proposal_name, const void
 
     Proposal *cmd = find_proposal_(proposal_name);
     if (!cmd) {
-        ESP_LOGW(TAG, "[%08X] propose: unknown proposal '%s'", group_id_, proposal_name.c_str());
+        ESP_LOGW(TAG, "[%08" PRIX32 "] propose: unknown proposal '%s'", group_id_, proposal_name.c_str());
         return;
     }
 
@@ -140,7 +141,7 @@ void BarrierGroupComponent::propose(const std::string &proposal_name, const void
     }
     if (in_required && cmd->accept_if_lambda != nullptr) {
         if (!cmd->accept_if_lambda(state_ptr)) {
-            ESP_LOGD(TAG, "[%08X] propose '%s' aborted locally (accept_if returned false)", group_id_, proposal_name.c_str());
+            ESP_LOGD(TAG, "[%08" PRIX32 "] propose '%s' aborted locally (accept_if returned false)", group_id_, proposal_name.c_str());
             return;
         }
     }
@@ -150,7 +151,7 @@ void BarrierGroupComponent::propose(const std::string &proposal_name, const void
         (static_cast<uint64_t>(my_node_id_) << 56) |
         (static_cast<uint64_t>(++seq_) & 0x00FFFFFFFFFFFFFFull);
 
-    ESP_LOGD(TAG, "[%08X] propose '%s'  id=%llu", group_id_, proposal_name.c_str(), proposal_id);
+    ESP_LOGD(TAG, "[%08" PRIX32 "] propose '%s'  id=%" PRIu64, group_id_, proposal_name.c_str(), proposal_id);
 
     // Record locally, self-ACK.
     PendingProposal p;
@@ -239,21 +240,21 @@ void BarrierGroupComponent::recv_udp_() {
     if (len < 0) return;  // EAGAIN / EWOULDBLOCK — nothing waiting
 
     if (len < static_cast<int>(sizeof(WireHeader))) {
-        ESP_LOGV(TAG, "[%08X] Dropped packet: too short (%d bytes)", group_id_, len);
+        ESP_LOGV(TAG, "[%08" PRIX32 "] Dropped packet: too short (%d bytes)", group_id_, len);
         return;
     }
 #endif
     auto *hdr = reinterpret_cast<WireHeader *>(buf);
     if (hdr->magic != MAGIC) {
-        ESP_LOGV(TAG, "[%08X] Dropped packet: bad magic (0x%08X)", group_id_, hdr->magic);
+        ESP_LOGV(TAG, "[%08" PRIX32 "] Dropped packet: bad magic (0x%08" PRIX32 ")", group_id_, hdr->magic);
         return;
     }
     if (hdr->group_id != group_id_) {
-        ESP_LOGV(TAG, "[%08X] Dropped packet: mismatched group_id (0x%08X)", group_id_, hdr->group_id);
+        ESP_LOGV(TAG, "[%08" PRIX32 "] Dropped packet: mismatched group_id (0x%08" PRIX32 ")", group_id_, hdr->group_id);
         return;
     }
     if (hdr->sender_id == my_node_id_) {
-        ESP_LOGV(TAG, "[%08X] Dropped packet: own echo", group_id_);
+        ESP_LOGV(TAG, "[%08" PRIX32 "] Dropped packet: own echo", group_id_);
         return;
     }
 
@@ -266,7 +267,7 @@ void BarrierGroupComponent::recv_udp_() {
                 memset(fixed->signature, 0, 16); // Zero for verification
 
                 if (!key_.empty() && !verify_signature_(buf, len, sig_received)) {
-                    ESP_LOGW(TAG, "[%08X] Invalid PROPOSE signature from node %d", group_id_, hdr->sender_id);
+                    ESP_LOGW(TAG, "[%08" PRIX32 "] Invalid PROPOSE signature from node %d", group_id_, hdr->sender_id);
                     return;
                 }
                 // Restore signature
@@ -274,7 +275,7 @@ void BarrierGroupComponent::recv_udp_() {
 
                 handle_propose_(buf, len);
             } else {
-                ESP_LOGV(TAG, "[%08X] Dropped PROPOSE: packet too short (%d bytes)", group_id_, len);
+                ESP_LOGV(TAG, "[%08" PRIX32 "] Dropped PROPOSE: packet too short (%d bytes)", group_id_, len);
             }
             break;
         }
@@ -282,28 +283,28 @@ void BarrierGroupComponent::recv_udp_() {
             if (len >= static_cast<int>(sizeof(AckMsg))) {
                 auto &msg = *reinterpret_cast<AckMsg *>(buf);
                 if (!key_.empty() && !verify_signature_(&msg, sizeof(msg) - 16, msg.signature)) {
-                    ESP_LOGW(TAG, "[%08X] Invalid ACK signature from node %d", group_id_, hdr->sender_id);
+                    ESP_LOGW(TAG, "[%08" PRIX32 "] Invalid ACK signature from node %d", group_id_, hdr->sender_id);
                     return;
                 }
                 handle_ack_(msg);
             } else {
-                ESP_LOGV(TAG, "[%08X] Dropped ACK: packet too short (%d bytes)", group_id_, len);
+                ESP_LOGV(TAG, "[%08" PRIX32 "] Dropped ACK: packet too short (%d bytes)", group_id_, len);
             }
             break;
         case MSG_REJECT:
             if (len >= static_cast<int>(sizeof(RejectMsg))) {
                 auto &msg = *reinterpret_cast<RejectMsg *>(buf);
                 if (!key_.empty() && !verify_signature_(&msg, sizeof(msg) - 16, msg.signature)) {
-                    ESP_LOGW(TAG, "[%08X] Invalid REJECT signature from node %d", group_id_, hdr->sender_id);
+                    ESP_LOGW(TAG, "[%08" PRIX32 "] Invalid REJECT signature from node %d", group_id_, hdr->sender_id);
                     return;
                 }
                 handle_reject_(msg);
             } else {
-                ESP_LOGV(TAG, "[%08X] Dropped REJECT: packet too short (%d bytes)", group_id_, len);
+                ESP_LOGV(TAG, "[%08" PRIX32 "] Dropped REJECT: packet too short (%d bytes)", group_id_, len);
             }
             break;
         default:
-            ESP_LOGW(TAG, "[%08X] unknown msg type %d", group_id_, hdr->type);
+            ESP_LOGW(TAG, "[%08" PRIX32 "] unknown msg type %d", group_id_, hdr->type);
     }
 }
 
@@ -320,7 +321,7 @@ void BarrierGroupComponent::handle_propose_(const uint8_t *buf, size_t len) {
     uint64_t seq = fixed->proposal_id & 0x00FFFFFFFFFFFFFFull;
     if (!key_.empty()) {
         if (seq <= peer_last_seq_[sender_id]) {
-            ESP_LOGW(TAG, "[%08X] Replay attack detected from node %d (seq %llu <= %llu)",
+            ESP_LOGW(TAG, "[%08" PRIX32 "] Replay attack detected from node %d (seq %" PRIu64 " <= %" PRIu64 ")",
                      group_id_, sender_id, seq, peer_last_seq_[sender_id]);
             return;
         }
@@ -331,12 +332,12 @@ void BarrierGroupComponent::handle_propose_(const uint8_t *buf, size_t len) {
     const uint8_t *end = buf + len;
 
     if (cursor >= end) {
-        ESP_LOGW(TAG, "[%08X] Malformed PROPOSE: no name", group_id_);
+        ESP_LOGW(TAG, "[%08" PRIX32 "] Malformed PROPOSE: no name", group_id_);
         return;
     }
     uint8_t name_len = *cursor++;
     if (cursor + name_len > end) {
-        ESP_LOGW(TAG, "[%08X] Malformed PROPOSE: name length overflow", group_id_);
+        ESP_LOGW(TAG, "[%08" PRIX32 "] Malformed PROPOSE: name length overflow", group_id_);
         return;
     }
     std::string cmd_name(reinterpret_cast<const char *>(cursor), name_len);
@@ -344,14 +345,14 @@ void BarrierGroupComponent::handle_propose_(const uint8_t *buf, size_t len) {
 
     Proposal *cmd = find_proposal_(cmd_name);
     if (!cmd) {
-        ESP_LOGW(TAG, "[%08X] PROPOSE for unknown proposal '%s'", group_id_, cmd_name.c_str());
+        ESP_LOGW(TAG, "[%08" PRIX32 "] PROPOSE for unknown proposal '%s'", group_id_, cmd_name.c_str());
         return;
     }
 
     size_t expected_state_size = cmd->state_size;
     size_t received_state_size = end - cursor;
     if (received_state_size != expected_state_size) {
-        ESP_LOGW(TAG, "[%08X] PROPOSE '%s' payload size mismatch: expected %zu, got %zu",
+        ESP_LOGW(TAG, "[%08" PRIX32 "] PROPOSE '%s' payload size mismatch: expected %zu, got %zu",
                  group_id_, cmd_name.c_str(), expected_state_size, received_state_size);
         return;
     }
@@ -364,13 +365,13 @@ void BarrierGroupComponent::handle_propose_(const uint8_t *buf, size_t len) {
         if (id == my_node_id_) { in_required = true; break; }
     if (!in_required) return;
 
-    ESP_LOGD(TAG, "[%08X] PROPOSE '%s' id=%llu from node %d",
+    ESP_LOGD(TAG, "[%08" PRIX32 "] PROPOSE '%s' id=%" PRIu64 " from node %d",
              group_id_, cmd_name.c_str(), fixed->proposal_id, fixed->header.sender_id);
 
     // Check if we reject it locally based on accept_if_lambda
     if (cmd->accept_if_lambda != nullptr) {
         if (!cmd->accept_if_lambda(state_ptr)) {
-            ESP_LOGD(TAG, "[%08X] PROPOSE '%s' id=%llu from node %d rejected locally",
+            ESP_LOGD(TAG, "[%08" PRIX32 "] PROPOSE '%s' id=%" PRIu64 " from node %d rejected locally",
                      group_id_, cmd_name.c_str(), fixed->proposal_id, fixed->header.sender_id);
 
             // Broadcast our REJECT to the multicast group.
@@ -428,20 +429,20 @@ void BarrierGroupComponent::handle_ack_(const AckMsg &msg) {
 
         Proposal *cmd = find_proposal_(p.proposal_name);
         size_t total = cmd ? cmd->required_nodes.size() : 0;
-        ESP_LOGD(TAG, "[%08X] ACK node %d  proposal=%llu  acked=%zu/%zu",
+        ESP_LOGD(TAG, "[%08" PRIX32 "] ACK node %d  proposal=%" PRIu64 "  acked=%zu/%zu",
                  group_id_, msg.acking_node_id, msg.proposal_id, p.acked_by.size(), total);
 
         check_unanimous_(p);
         return;
     }
-    ESP_LOGD(TAG, "[%08X] ACK for unknown proposal %llu (race or already executed)", group_id_, msg.proposal_id);
+    ESP_LOGD(TAG, "[%08" PRIX32 "] ACK for unknown proposal %" PRIu64 " (race or already executed)", group_id_, msg.proposal_id);
 }
 
 void BarrierGroupComponent::handle_reject_(const RejectMsg &msg) {
     uint64_t id = msg.proposal_id;
     for (auto &p : pending_) {
         if (p.proposal_id == id) {
-            ESP_LOGD(TAG, "[%08X] proposal %llu rejected by node %d",
+            ESP_LOGD(TAG, "[%08" PRIX32 "] proposal %" PRIu64 " rejected by node %d",
                      group_id_, id, msg.rejecting_node_id);
 
             Proposal *cmd = find_proposal_(p.proposal_name);
@@ -457,7 +458,7 @@ void BarrierGroupComponent::handle_reject_(const RejectMsg &msg) {
             return;
         }
     }
-    ESP_LOGD(TAG, "[%08X] REJECT for unknown proposal %llu (race or already resolved)", group_id_, id);
+    ESP_LOGD(TAG, "[%08" PRIX32 "] REJECT for unknown proposal %" PRIu64 " (race or already resolved)", group_id_, id);
 }
 
 // ---------------------------------------------------------------------------
@@ -471,7 +472,7 @@ void BarrierGroupComponent::check_unanimous_(PendingProposal &p) {
     for (uint8_t req_id : cmd->required_nodes)
         if (!p.acked_by.count(req_id)) return;  // still waiting
 
-    ESP_LOGD(TAG, "[%08X] unanimous! executing '%s'", group_id_, p.proposal_name.c_str());
+    ESP_LOGD(TAG, "[%08" PRIX32 "] unanimous! executing '%s'", group_id_, p.proposal_name.c_str());
     if (cmd->on_execute_callback) {
         cmd->on_execute_callback(p.state.empty() ? nullptr : p.state.data());
     }
@@ -494,7 +495,7 @@ void BarrierGroupComponent::check_timeouts_() {
         std::remove_if(pending_.begin(), pending_.end(),
                        [&](const PendingProposal &p) {
                            if (now - p.created_ms < proposal_timeout_ms_) return false;
-                           ESP_LOGW(TAG, "[%08X] proposal '%s' id=%llu timed out (acked %zu nodes)",
+                           ESP_LOGW(TAG, "[%08" PRIX32 "] proposal '%s' id=%" PRIu64 " timed out (acked %zu nodes)",
                                     group_id_, p.proposal_name.c_str(), p.proposal_id, p.acked_by.size());
                            
                            Proposal *cmd = find_proposal_(p.proposal_name);

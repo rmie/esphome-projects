@@ -369,6 +369,7 @@ async def to_code(config):
             ),
         }
     ),
+    synchronous=True,
 )
 async def barrier_group_propose_to_code(config, action_id, template_arg, args):
     parent = await cg.get_variable(config[CONF_ID])
