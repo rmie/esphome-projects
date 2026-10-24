@@ -8,3 +8,5 @@ esp32:
     type: esp-idf
     advanced:
       minimum_chip_revision: "3.1"
+      flash_chip: generic
+      sram1_as_iram: true
