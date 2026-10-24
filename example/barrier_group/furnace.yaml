@@ -1,0 +1,96 @@
+substitutions:
+  main_name: furnace
+  friendly_name: "Kitchen Furnace"
+  safety_power_threshold: "10.0"
+  zero_power_deadband: "5.0"
+
+packages:
+  common: !include furnace-stove-common.yaml
+
+switch:
+  - platform: gpio
+    pin: GPIO16
+    id: relay
+    internal: true
+    restore_mode: ALWAYS_OFF
+
+interval:
+  - id: furnace_active_ping
+    interval: 5s
+    startup_delay: 0s
+    then:
+      - if:
+          condition:
+            - binary_sensor.is_on: local_active
+          then:
+            - barrier_group.propose:
+                id: furnace_stove_interlock
+                proposal: AUTHORIZE_FURNACE
+
+barrier_group:
+  - id: furnace_stove_interlock
+    proposals:
+      - name: AUTHORIZE_FURNACE
+        required_nodes: [furnace, stove]
+        on_timeout:
+          - state_machine.transition:
+              id: interlock_sm
+              input: LOCKOUT_PEER_TIMEOUT
+          - logger.log: "AUTHORIZE_FURNACE timed out. Stove offline. Locking out."
+        on_reject:
+          - state_machine.transition:
+              id: interlock_sm
+              input: LOCKOUT_PEER_REJECT
+          - logger.log: "AUTHORIZE_FURNACE rejected. Stove is active and window closed. Locking out."
+        on_execute:
+          - if:
+              condition:
+                or:
+                  - state_machine.state:
+                      id: interlock_sm
+                      value: COMM_LOCKOUT_REJECT
+                  - state_machine.state:
+                      id: interlock_sm
+                      value: COMM_LOCKOUT_TIMEOUT
+              then:
+                - state_machine.transition:
+                    id: interlock_sm
+                    input: CLEAR_LOCKOUT
+                - logger.log: "AUTHORIZE_FURNACE succeeded. Recovering from lockout."
+
+script:
+  - id: broadcast_state
+    then:
+      - lambda: |-
+          uint64_t my_mac = 0;
+          for (uint8_t b : get_mac_address()) my_mac = (my_mac << 8) | b;
+          furnace_stove_interlock_FURNACE_STATE_State state_data{id(local_emergency).state, my_mac};
+          id(furnace_stove_interlock).propose("FURNACE_STATE", &state_data, sizeof(state_data));
+  - id: handle_furnace_state
+    parameters:
+      emergency_val: bool
+      peer_mac_val: uint64_t
+    then:
+      - logger.log: "Ignoring own state proposal"
+  - id: handle_stove_state
+    parameters:
+      emergency_val: bool
+      peer_mac_val: uint64_t
+    then:
+      - lambda: |-
+          if (emergency_val) {
+            id(faulty_peer_mac) = peer_mac_val;
+            id(peer_emergency).publish_state(true);
+          } else {
+            if (id(peer_emergency).state) {
+              if (peer_mac_val != id(faulty_peer_mac)) {
+                ESP_LOGI("main", "New hardware detected (%llu). Clearing peer emergency.", peer_mac_val);
+                id(faulty_peer_mac) = 0;
+                id(peer_emergency).publish_state(false);
+              } else {
+                ESP_LOGW("main", "Ignoring safe broadcast from known faulty peer hardware.");
+              }
+            } else {
+              id(peer_emergency).publish_state(false);
+            }
+          }
