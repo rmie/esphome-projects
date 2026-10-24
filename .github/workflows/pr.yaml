@@ -13,6 +13,7 @@ on:
       - 'hotwater-heatpump/**.yaml'
       - 'components/barrier_group/**'
       - 'example/barrier_group/**.yaml'
+      - 'wildlife-cam/**.yaml'
 
 jobs:
   esphome-compile:
@@ -34,6 +35,9 @@ jobs:
           - config: hotwater-heatpump/hotwater-heatpump.yaml
             friendly_name: "BrauchwasserWP"
             main_name: "brauchwasserwp"
+          - config: wildlife-cam/wildlife-cam.yaml
+            friendly_name: "Wildlife Cam"
+            main_name: "wildlife-cam"
           - config: example/barrier_group/furnace.yaml
             friendly_name: "Kitchen Furnace"
             main_name: "furnace"
@@ -67,6 +71,7 @@ jobs:
         run: |
           cat <<EOF | tee hotwater-heatpump/secrets.yaml \
                     | tee dehumidifier/secrets.yaml \
+                    | tee wildlife-cam/secrets.yaml \
                     | tee common/secrets.yaml \
                     > testing/secrets.yaml
           wifi_ssid: "Fake-WiFi-Network"

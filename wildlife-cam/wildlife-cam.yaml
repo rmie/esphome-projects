@@ -1,0 +1,108 @@
+substitutions:
+  main_name: "wildlife-cam"
+  friendly_name: "Wildlife Cam"
+
+packages:
+  platform: !include ../common/esp32-cam.yaml
+
+web_server:
+  port: 80
+  version: 3
+
+esp32_camera:
+  name: "${friendly_name}"
+  max_framerate: 10.0 fps
+  idle_framerate: 0.1 fps
+
+esp32_camera_web_server:
+  - port: 8080
+    mode: stream
+  - port: 8081
+    mode: snapshot
+
+switch:
+  - platform: template
+    name: "Auto Exposure (AEC)"
+    id: camera_aec
+    icon: "mdi:camera-metering-center"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    turn_on_action:
+      - lambda: |-
+          id(cam).set_aec_mode(esphome::esp32_camera::ESP32_GC_MODE_AUTO);
+          id(cam).update_camera_parameters();
+    turn_off_action:
+      - lambda: |-
+          id(cam).set_aec_mode(esphome::esp32_camera::ESP32_GC_MODE_MANU);
+          id(cam).update_camera_parameters();
+
+  - platform: template
+    name: "DSP AEC2"
+    id: camera_aec2
+    icon: "mdi:camera-iris"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    turn_on_action:
+      - lambda: |-
+          id(cam).set_aec2(true);
+          id(cam).update_camera_parameters();
+    turn_off_action:
+      - lambda: |-
+          id(cam).set_aec2(false);
+          id(cam).update_camera_parameters();
+
+number:
+  - platform: template
+    name: "Flash Brightness"
+    id: flash_brightness
+    icon: "mdi:brightness-percent"
+    min_value: 0
+    max_value: 100
+    step: 1
+    unit_of_measurement: "%"
+    mode: slider
+    optimistic: true
+    initial_value: 0
+    restore_value: true
+    set_action:
+      - if:
+          condition:
+            lambda: 'return x <= 0.0;'
+          then:
+            - light.turn_off: esp_cam_light
+          else:
+            - light.turn_on:
+                id: esp_cam_light
+                brightness: !lambda 'return x / 100.0;'
+
+  - platform: template
+    name: "Auto Exposure Level"
+    id: camera_ae_level
+    icon: "mdi:exposure"
+    min_value: -2
+    max_value: 2
+    step: 1
+    mode: slider
+    optimistic: true
+    initial_value: 0
+    restore_value: true
+    set_action:
+      - lambda: |-
+          id(cam).set_ae_level((int)x);
+          id(cam).update_camera_parameters();
+
+  - platform: template
+    name: "Manual Exposure Time"
+    id: camera_manual_exposure
+    icon: "mdi:camera-timer"
+    min_value: 0
+    max_value: 1200
+    step: 10
+    mode: slider
+    optimistic: true
+    initial_value: 300
+    restore_value: true
+    set_action:
+      - lambda: |-
+          id(cam).set_aec_value((uint32_t)x);
+          id(cam).update_camera_parameters();
