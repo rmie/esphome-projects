@@ -1,18 +1,16 @@
+packages:
+  platform: !include ../common/esp32-c3.yaml
+
 substitutions:
-  name: "ftm-anchor-c3"
+  main_name: "ftm-anchor-c3"
   friendly_name: "FTM Anchor C3"
 
 esphome:
-  name: "${name}"
+  name: "${main_name}"
   friendly_name: "${friendly_name}"
 
 esp32:
-  board: esp32-c3-devkitm-1
-  variant: esp32c3
   framework:
-    type: esp-idf
-    advanced:
-      flash_chip: generic
     sdkconfig_options:
       CONFIG_ESP_WIFI_FTM_ENABLE: y
       CONFIG_ESP_WIFI_FTM_RESPONDER_SUPPORT: y
@@ -22,9 +20,6 @@ external_components:
       type: local
       path: ../components
 
-logger:
-  level: INFO
-
 api:
   encryption:
     key: "cXn2Hy3NV1VgjSkuRcOVQnBUCROkDkVaTARTckWVz80="
@@ -33,8 +28,6 @@ ota:
   - platform: esphome
 
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
   post_connect_roaming: false
   power_save_mode: NONE
   # Required so ESPHome compiles esp_netif_create_default_wifi_ap():

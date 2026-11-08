@@ -25,7 +25,38 @@ sensor:
   - platform: internal_temperature
     name: "CPU Temperature"
     entity_category: diagnostic
-    accuracy_decimals: 1  
+    accuracy_decimals: 1
+
+  - platform: template
+    name: "Free DRAM"
+    id: free_dram
+    unit_of_measurement: "bytes"
+    icon: "mdi:memory"
+    state_class: "measurement"
+    entity_category: "diagnostic"
+    lambda: |-
+      return heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    update_interval: 15s
+
+  - platform: template
+    name: "Free DMA RAM"
+    id: free_dma_ram
+    unit_of_measurement: "bytes"
+    icon: "mdi:chip"
+    state_class: "measurement"
+    entity_category: "diagnostic"
+    lambda: |-
+      return heap_caps_get_free_size(MALLOC_CAP_DMA);
+    update_interval: 15s
+
+  - platform: template
+    name: "Largest Free Block"
+    id: largest_block
+    unit_of_measurement: "bytes"
+    entity_category: "diagnostic"
+    lambda: |-
+      return heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    update_interval: 15s
 
 button:
   - platform: restart

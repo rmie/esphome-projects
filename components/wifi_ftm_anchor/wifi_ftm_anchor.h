@@ -20,7 +20,8 @@ class WifiFtmAnchor : public Component {
   void set_mac_sensor(text_sensor::TextSensor *s) { this->mac_sensor_ = s; }
 
   float get_setup_priority() const override {
-    return setup_priority::AFTER_WIFI;
+    // Delay setup until the network data connection is active (API/MQTT phase)
+    return esphome::setup_priority::AFTER_CONNECTION; // Value is 100.0f
   }
 
   void setup() override {
