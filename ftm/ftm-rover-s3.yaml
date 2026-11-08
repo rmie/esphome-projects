@@ -1,0 +1,58 @@
+substitutions:
+  name: "ftm-rover-s3"
+  friendly_name: "FTM Rover S3"
+  anchor_mac: "90:70:69:C2:9C:71"
+
+esphome:
+  name: "${name}"
+  friendly_name: "${friendly_name}"
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+    advanced:
+      flash_chip: boya
+    sdkconfig_options:
+      CONFIG_ESP_WIFI_FTM_ENABLE: y
+      CONFIG_ESP_WIFI_FTM_INITIATOR_SUPPORT: y
+      CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG: y
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+logger:
+  hardware_uart: USB_SERIAL_JTAG
+  level: DEBUG
+
+api:
+  encryption:
+    key: "8PAjTj+RgVswnXiXCSSVnUXXFSCjvsXSSyW5YZPvmCI="
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  post_connect_roaming: false
+  power_save_mode: NONE
+
+wifi_ftm_rover:
+  mac_address: ${anchor_mac}
+  frame_count: 32
+  update_interval: 1s
+  distance:
+    name: "Anchor Distance"
+    id: anchor_distance
+  rtt:
+    name: "Anchor RTT"
+    id: anchor_rtt
