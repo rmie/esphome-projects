@@ -1,0 +1,38 @@
+packages:
+  management: !include all.yaml
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+    advanced:
+      flash_chip: boya
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+sensor:
+  - platform: template
+    name: "Free PSRAM"
+    id: free_psram
+    unit_of_measurement: "bytes"
+    icon: "mdi:database"
+    state_class: "measurement"
+    entity_category: "diagnostic"
+    lambda: |-
+      return heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    update_interval: 15s
+
+  - platform: template
+    name: "Free IRAM"
+    id: free_iram
+    unit_of_measurement: "bytes"
+    icon: "mdi:code-braces"
+    state_class: "measurement"
+    entity_category: "diagnostic"
+    lambda: |-
+      return heap_caps_get_free_size(MALLOC_CAP_32BIT) - heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    update_interval: 15s

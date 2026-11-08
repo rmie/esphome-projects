@@ -1,0 +1,45 @@
+packages:
+  platform: !include ../common/esp32-s3-guition.yaml
+
+substitutions:
+  main_name: "ftm-rover-s3"
+  friendly_name: "FTM Rover S3"
+  anchor_mac: "90:70:69:C2:9C:71"
+
+esphome:
+  name: "${main_name}"
+  friendly_name: "${friendly_name}"
+
+esp32:
+  framework:
+    sdkconfig_options:
+      CONFIG_ESP_WIFI_FTM_ENABLE: y
+      CONFIG_ESP_WIFI_FTM_INITIATOR_SUPPORT: y
+      CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG: y
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+api:
+  encryption:
+    key: "8PAjTj+RgVswnXiXCSSVnUXXFSCjvsXSSyW5YZPvmCI="
+
+ota:
+  - platform: esphome
+
+wifi:
+  post_connect_roaming: false
+  power_save_mode: NONE
+
+wifi_ftm_rover:
+  mac_address: ${anchor_mac}
+  frame_count: 32
+  update_interval: 1s
+  distance:
+    name: "Anchor Distance"
+    id: anchor_distance
+  rtt:
+    name: "Anchor RTT"
+    id: anchor_rtt
